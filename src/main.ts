@@ -33,20 +33,18 @@ const PlatformServicesLayer = Layer.mergeAll(
 // GitService is standalone
 const GitLayer = GitService.layer
 
-// Now combine platform services with git
-const BaseServicesLayer = Layer.merge(PlatformServicesLayer, GitLayer)
-
 // RegistryService needs Git and Cache
 const RegistryLayer = RegistryService.layer.pipe(
   Layer.provide(GitLayer),
   Layer.provide(PlatformServicesLayer)
 )
 
-// All services together
+// All services together, merged with BunContext for CLI
 const MainLayer = Layer.mergeAll(
   PlatformServicesLayer,
   GitLayer,
-  RegistryLayer
+  RegistryLayer,
+  BunContext.layer
 )
 
 // Root command
@@ -75,6 +73,5 @@ const cli = Command.run(repo, {
 // Run with all services
 cli(process.argv).pipe(
   Effect.provide(MainLayer),
-  Effect.provide(BunContext.layer),
   BunRuntime.runMain
 )

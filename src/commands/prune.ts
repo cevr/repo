@@ -108,9 +108,5 @@ export const prune = Command.make(
       yield* Console.log("")
       yield* Console.log(`Removed ${toRemove.length} repositories.`)
       yield* Console.log(`Freed: ${formatBytes(totalSize)}`)
-    }).pipe(
-      Effect.catchAll((error) =>
-        Console.error(`Error: ${error._tag}: ${JSON.stringify(error)}`)
-      )
-    )
+    })
 )

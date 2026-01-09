@@ -28,6 +28,7 @@ export class RegistryService extends Context.Tag("@repo/RegistryService")<
     RegistryService,
     Effect.gen(function* () {
       const cache = yield* CacheService
+      const git = yield* GitService
 
       const parseSpec = (
         input: string
@@ -73,8 +74,11 @@ export class RegistryService extends Context.Tag("@repo/RegistryService")<
           })
         )
 
-      const fetch = Effect.fn("RegistryService.fetch")(
-        function* (spec: PackageSpec, destPath: string, options?: FetchOptions) {
+      // Create a layer with the acquired GitService for providing to fetch helpers
+      const gitLayer = Layer.succeed(GitService, git)
+
+      const fetch = (spec: PackageSpec, destPath: string, options?: FetchOptions) =>
+        Effect.gen(function* () {
           yield* cache.ensureDir(destPath).pipe(
             Effect.mapError(
               (e) =>
@@ -90,90 +94,24 @@ export class RegistryService extends Context.Tag("@repo/RegistryService")<
 
           switch (spec.registry) {
             case "github":
-              yield* fetchGithub(spec, destPath, depth)
+              yield* fetchGithub(spec, destPath, depth).pipe(Effect.provide(gitLayer))
               break
             case "npm":
-              yield* fetchNpm(spec, destPath, depth)
+              yield* fetchNpm(spec, destPath, depth).pipe(Effect.provide(gitLayer))
               break
             case "pypi":
-              yield* fetchPypi(spec, destPath, depth)
+              yield* fetchPypi(spec, destPath, depth).pipe(Effect.provide(gitLayer))
               break
             case "crates":
-              yield* fetchCrates(spec, destPath, depth)
+              yield* fetchCrates(spec, destPath, depth).pipe(Effect.provide(gitLayer))
               break
           }
-        }
-      )
+        })
 
       return RegistryService.of({ parseSpec, fetch })
     })
   )
 
-  // Test layer
-  static readonly testLayer = Layer.sync(RegistryService, () => {
-    const fetchedSpecs = new Map<string, PackageSpec>()
-
-    return RegistryService.of({
-      parseSpec: (input) =>
-        Effect.sync(() => {
-          const trimmed = input.trim()
-
-          if (trimmed.startsWith("npm:")) {
-            const result = parseNpmSpec(trimmed.slice(4))
-            if ("error" in result) {
-              throw new SpecParseError({ input, message: result.error })
-            }
-            return result
-          }
-          if (trimmed.startsWith("pypi:") || trimmed.startsWith("pip:")) {
-            const prefix = trimmed.startsWith("pypi:") ? "pypi:" : "pip:"
-            const result = parsePypiSpec(trimmed.slice(prefix.length))
-            if ("error" in result) {
-              throw new SpecParseError({ input, message: result.error })
-            }
-            return result
-          }
-          if (
-            trimmed.startsWith("crates:") ||
-            trimmed.startsWith("cargo:") ||
-            trimmed.startsWith("rust:")
-          ) {
-            const prefixLen = trimmed.indexOf(":") + 1
-            const result = parseCratesSpec(trimmed.slice(prefixLen))
-            if ("error" in result) {
-              throw new SpecParseError({ input, message: result.error })
-            }
-            return result
-          }
-          if (trimmed.startsWith("github:")) {
-            const result = parseGithubSpec(trimmed.slice(7))
-            if ("error" in result) {
-              throw new SpecParseError({ input, message: result.error })
-            }
-            return result
-          }
-
-          if (trimmed.includes("/") && !trimmed.startsWith("@")) {
-            const result = parseGithubSpec(trimmed)
-            if ("error" in result) {
-              throw new SpecParseError({ input, message: result.error })
-            }
-            return result
-          }
-
-          const result = parseNpmSpec(trimmed)
-          if ("error" in result) {
-            throw new SpecParseError({ input, message: result.error })
-          }
-          return result
-        }),
-
-      fetch: (spec, destPath) =>
-        Effect.sync(() => {
-          fetchedSpecs.set(destPath, spec)
-        }),
-    })
-  })
 }
 
 // Parser helpers

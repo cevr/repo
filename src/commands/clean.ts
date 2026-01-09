@@ -36,9 +36,5 @@ export const clean = Command.make("clean", { yes: confirmOption }, ({ yes }) =>
 
     yield* Console.log(`Removed ${repos.length} repositories.`)
     yield* Console.log(`Freed: ${formatBytes(totalSize)}`)
-  }).pipe(
-    Effect.catchAll((error) =>
-      Console.error(`Error: ${error._tag}: ${JSON.stringify(error)}`)
-    )
-  )
+  })
 )

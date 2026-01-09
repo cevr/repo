@@ -103,15 +103,5 @@ export const list = Command.make(
       yield* Console.log("═".repeat(80))
       const totalSize = sorted.reduce((sum, r) => sum + r.sizeBytes, 0)
       yield* Console.log(`Total: ${formatBytes(totalSize)}`)
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.gen(function* () {
-          if (typeof error === "object" && error !== null && "_tag" in error) {
-            yield* Console.error(`Error: ${error._tag}: ${JSON.stringify(error)}`)
-          } else {
-            yield* Console.error(`Error: ${String(error)}`)
-          }
-        })
-      )
-    )
+    })
 )

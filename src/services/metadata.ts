@@ -1,7 +1,7 @@
 import { FileSystem, Path } from "@effect/platform"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import type { PackageSpec, RepoMetadata } from "../types.js"
-import { MetadataIndex, MetadataError } from "../types.js"
+import { MetadataIndex } from "../types.js"
 
 // Create encode/decode functions for proper JSON serialization
 const encodeMetadata = Schema.encodeSync(MetadataIndex)
@@ -138,81 +138,4 @@ export class MetadataService extends Context.Tag("@repo/MetadataService")<
     })
   )
 
-  // Test layer using in-memory store
-  static readonly testLayer = Layer.sync(MetadataService, () => {
-    let index: MetadataIndex = { version: 1, repos: [] }
-
-    const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
-      if (a.registry !== b.registry || a.name !== b.name) return false
-      const aVersion = Option.getOrElse(a.version, () => "")
-      const bVersion = Option.getOrElse(b.version, () => "")
-      return aVersion === bVersion
-    }
-
-    const load = () => Effect.succeed(index)
-
-    const save = (newIndex: MetadataIndex) =>
-      Effect.sync(() => {
-        index = newIndex
-      })
-
-    const add = (metadata: RepoMetadata) =>
-      Effect.sync(() => {
-        const filtered = index.repos.filter(
-          (r) => !specMatches(r.spec, metadata.spec)
-        )
-        index = { ...index, repos: [...filtered, metadata] }
-      })
-
-    const remove = (spec: PackageSpec) =>
-      Effect.sync(() => {
-        const originalLength = index.repos.length
-        const filtered = index.repos.filter((r) => !specMatches(r.spec, spec))
-        index = { ...index, repos: filtered }
-        return filtered.length < originalLength
-      })
-
-    const find = (spec: PackageSpec) =>
-      Effect.sync(
-        () => index.repos.find((r) => specMatches(r.spec, spec)) ?? null
-      )
-
-    const updateAccessTime = (spec: PackageSpec) =>
-      Effect.sync(() => {
-        index = {
-          ...index,
-          repos: index.repos.map((r) => {
-            if (specMatches(r.spec, spec)) {
-              return { ...r, lastAccessedAt: new Date().toISOString() }
-            }
-            return r
-          }),
-        }
-      })
-
-    const findOlderThan = (days: number) =>
-      Effect.sync(() => {
-        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
-        return index.repos.filter(
-          (r) => new Date(r.lastAccessedAt).getTime() < cutoff
-        )
-      })
-
-    const findLargerThan = (bytes: number) =>
-      Effect.sync(() => index.repos.filter((r) => r.sizeBytes > bytes))
-
-    const all = () => Effect.sync(() => index.repos)
-
-    return MetadataService.of({
-      load,
-      save,
-      add,
-      remove,
-      find,
-      updateAccessTime,
-      findOlderThan,
-      findLargerThan,
-      all,
-    })
-  })
 }

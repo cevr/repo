@@ -1,6 +1,6 @@
 import { Args, Command, Options } from "@effect/cli"
 import { Console, Effect, Option } from "effect"
-import { specToString } from "../types.js"
+import { OpenError, specToString } from "../types.js"
 import { MetadataService } from "../services/metadata.js"
 import { RegistryService } from "../services/registry.js"
 
@@ -49,8 +49,10 @@ export const open = Command.make(
           stderr: "pipe",
         })
         yield* Effect.tryPromise({
-          try: () => proc.exited,
-          catch: (e) => new Error(`Failed to open Finder: ${e}`),
+          try: () => proc.exited.then((code) => {
+            if (code !== 0) throw new Error(`exit code ${code}`)
+          }),
+          catch: (e) => new OpenError({ command: "open", cause: e }),
         })
         yield* Console.log(`Opened in Finder: ${existing.path}`)
       } else {
@@ -64,8 +66,10 @@ export const open = Command.make(
           stderr: "pipe",
         })
         yield* Effect.tryPromise({
-          try: () => proc.exited,
-          catch: (e) => new Error(`Failed to open editor: ${e}`),
+          try: () => proc.exited.then((code) => {
+            if (code !== 0) throw new Error(`exit code ${code}`)
+          }),
+          catch: (e) => new OpenError({ command: editorCmd, cause: e }),
         })
         yield* Console.log(`Opened in ${editorCmd}: ${existing.path}`)
       }

@@ -6,8 +6,8 @@
     "build": "bun build src/main.ts --outfile bin/repo --compile",
     "dev": "bun run src/main.ts",
     "typecheck": "tsc --noEmit",
-    "test": "vitest",
-    "test:run": "vitest run",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "prepare": "effect-language-service patch",
     "link": "ln -sf $(pwd)/bin/repo ~/.bun/bin/repo"
   },

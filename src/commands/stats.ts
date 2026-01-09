@@ -96,9 +96,5 @@ export const stats = Command.make("stats", { json: jsonOption }, ({ json }) =>
     if (newest) {
       yield* Console.log(`Newest: ${newest.spec.name} (${newest.lastAccessedAt})`)
     }
-  }).pipe(
-    Effect.catchAll((error) =>
-      Console.error(`Error: ${error._tag}: ${JSON.stringify(error)}`)
-    )
-  )
+  })
 )

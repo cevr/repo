@@ -66,6 +66,11 @@ export class NetworkError extends Data.TaggedError("NetworkError")<{
   readonly cause: unknown
 }> {}
 
+export class OpenError extends Data.TaggedError("OpenError")<{
+  readonly command: string
+  readonly cause: unknown
+}> {}
+
 // Utility to format bytes
 export const formatBytes = (bytes: number): string => {
   if (bytes < 1024) return `${bytes} B`

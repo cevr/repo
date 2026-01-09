@@ -166,10 +166,9 @@ export class GitService extends Context.Tag("@repo/GitService")<
             stderr: "pipe",
           })
 
-          const exitCode = yield* Effect.tryPromise({
-            try: () => proc.exited,
-            catch: () => 1, // Not a git repo
-          })
+          const exitCode = yield* Effect.promise(() => proc.exited).pipe(
+            Effect.orElseSucceed(() => 1)
+          )
 
           return exitCode === 0
         }),
@@ -224,25 +223,4 @@ export class GitService extends Context.Tag("@repo/GitService")<
     })
   )
 
-  // Test layer using mock
-  static readonly testLayer = Layer.sync(GitService, () => {
-    const clonedRepos = new Map<string, { url: string; ref?: string }>()
-
-    return GitService.of({
-      clone: (url, dest, options) =>
-        Effect.sync(() => {
-          const entry: { url: string; ref?: string } = { url }
-          if (options?.ref) entry.ref = options.ref
-          clonedRepos.set(dest, entry)
-        }),
-
-      update: () => Effect.void,
-
-      isGitRepo: (path) => Effect.succeed(clonedRepos.has(path)),
-
-      getDefaultBranch: () => Effect.succeed("main"),
-
-      getCurrentRef: () => Effect.succeed("v1.0.0"),
-    })
-  })
 }
