@@ -2,17 +2,36 @@
   "name": "@cvr/repo",
   "version": "1.0.0",
   "type": "module",
+  "bin": {
+    "repo": "./bin/repo"
+  },
+  "files": [
+    "src",
+    "bin",
+    "tsconfig.json"
+  ],
   "scripts": {
     "build": "bun build src/main.ts --outfile bin/repo --compile",
+    "postinstall": "bun run build",
+    "prepublishOnly": "rm -rf bin",
     "dev": "bun run src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "prepare": "effect-language-service patch",
-    "link": "ln -sf $(pwd)/bin/repo ~/.bun/bin/repo"
+    "link": "ln -sf $(pwd)/bin/repo ~/.bun/bin/repo",
+    "version": "changeset version",
+    "release": "changeset publish"
   },
-  "bin": {
-    "repo": "./bin/repo"
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cevr/repo.git"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   },
   "dependencies": {
     "@effect/cli": "^0.73.0",
@@ -21,6 +40,8 @@
     "effect": "^3.19.14"
   },
   "devDependencies": {
+    "@changesets/changelog-github": "^0.5.0",
+    "@changesets/cli": "^2.27.0",
     "@effect/language-service": "^0.64.0",
     "@effect/vitest": "^0.27.0",
     "@types/bun": "^1.3.5",
