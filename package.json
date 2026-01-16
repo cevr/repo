@@ -7,13 +7,11 @@
   },
   "files": [
     "src",
-    "bin",
     "tsconfig.json"
   ],
   "scripts": {
     "build": "bun build src/main.ts --outfile bin/repo --compile",
     "postinstall": "bun run build",
-    "prepublishOnly": "rm -rf bin",
     "dev": "bun run src/main.ts",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
