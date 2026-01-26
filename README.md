@@ -46,27 +46,27 @@ repo search "createServer"
 
 ## Spec Formats
 
-| Format | Example |
-|--------|---------|
-| GitHub | `owner/repo`, `owner/repo@v1.0.0` |
-| npm | `npm:lodash`, `npm:@effect/cli@0.73.0` |
-| PyPI | `pypi:requests@2.31.0` |
-| Crates | `crates:serde@1.0.0` |
+| Format | Example                                |
+| ------ | -------------------------------------- |
+| GitHub | `owner/repo`, `owner/repo@v1.0.0`      |
+| npm    | `npm:lodash`, `npm:@effect/cli@0.73.0` |
+| PyPI   | `pypi:requests@2.31.0`                 |
+| Crates | `crates:serde@1.0.0`                   |
 
 ## Commands
 
-| Command | Description |
-|---------|-------------|
-| `repo fetch <spec>` | Fetch/update repository |
-| `repo path <spec>` | Get cached path |
-| `repo info <spec>` | Show repository metadata |
-| `repo list` | List cached repos |
+| Command               | Description                |
+| --------------------- | -------------------------- |
+| `repo fetch <spec>`   | Fetch/update repository    |
+| `repo path <spec>`    | Get cached path            |
+| `repo info <spec>`    | Show repository metadata   |
+| `repo list`           | List cached repos          |
 | `repo search <query>` | Search across cached repos |
-| `repo stats` | Cache statistics |
-| `repo remove <spec>` | Remove from cache |
-| `repo prune` | Remove old/large repos |
-| `repo clean` | Clear entire cache |
-| `repo open <spec>` | Open in editor |
+| `repo stats`          | Cache statistics           |
+| `repo remove <spec>`  | Remove from cache          |
+| `repo prune`          | Remove old/large repos     |
+| `repo clean`          | Clear entire cache         |
+| `repo open <spec>`    | Open in editor             |
 
 See [SKILL.md](./SKILL.md) for detailed usage.
 
