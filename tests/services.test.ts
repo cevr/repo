@@ -403,6 +403,46 @@ describe("spec parsing", () => {
       }).pipe(Effect.provide(layer));
     }),
   );
+
+  it.effect("normalizes GitHub repo names to lowercase", () =>
+    Effect.gen(function* () {
+      const { layer } = createTestLayer();
+
+      yield* Effect.gen(function* () {
+        const registry = yield* RegistryService;
+        const metadata = yield* MetadataService;
+        const cache = yield* CacheService;
+
+        // Fetch with mixed case
+        const spec1 = yield* registry.parseSpec("Vercel/Next.js");
+        expect(spec1.name).toBe("vercel/next.js");
+
+        // Add to metadata
+        const destPath = yield* cache.getPath(spec1);
+        yield* metadata.add({
+          spec: spec1,
+          fetchedAt: new Date().toISOString(),
+          lastAccessedAt: new Date().toISOString(),
+          sizeBytes: 1000,
+          path: destPath,
+        });
+
+        // Lookup with different case should find same repo
+        const spec2 = yield* registry.parseSpec("vercel/next.js");
+        const spec3 = yield* registry.parseSpec("VERCEL/NEXT.JS");
+
+        const found1 = yield* metadata.find(spec1);
+        const found2 = yield* metadata.find(spec2);
+        const found3 = yield* metadata.find(spec3);
+
+        expect(found1).not.toBeNull();
+        expect(found2).not.toBeNull();
+        expect(found3).not.toBeNull();
+        expect(found1?.path).toBe(found2?.path);
+        expect(found2?.path).toBe(found3?.path);
+      }).pipe(Effect.provide(layer));
+    }),
+  );
 });
 
 describe("git operations", () => {
