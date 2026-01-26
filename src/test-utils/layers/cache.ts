@@ -40,7 +40,7 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
   const stateRef = Ref.unsafeMake(state)
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
-    sequenceRef ? recordCall(sequenceRef, { service: "cache", method, args, result }) : Effect.void
+    sequenceRef !== undefined ? recordCall(sequenceRef, { service: "cache", method, args, result }) : Effect.void
 
   const getPath = (spec: PackageSpec) =>
     Effect.gen(function* () {
@@ -110,10 +110,7 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
           return total
         }),
 
-      ensureDir: (path) =>
-        Effect.gen(function* () {
-          yield* record("ensureDir", { path })
-        }),
+      ensureDir: (path) => record("ensureDir", { path }),
     })
   )
 

@@ -25,12 +25,12 @@ export const path = Command.make(
       const parsedSpec = yield* registry.parseSpec(spec)
       const existing = yield* metadata.find(parsedSpec)
 
-      if (!existing) {
+      if (existing === null) {
         if (!quiet) {
           yield* Console.error(`Not cached: ${specToString(parsedSpec)}`)
           yield* Console.error(`Run: repo fetch ${spec}`)
         }
-        return yield* Effect.fail(new NotFoundError({ spec: parsedSpec }))
+        return yield* new NotFoundError({ spec: parsedSpec })
       }
 
       yield* Console.log(existing.path)

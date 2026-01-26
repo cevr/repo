@@ -49,13 +49,13 @@ export const stats = Command.make("stats", { json: jsonOption }, ({ json }) =>
             totalCount,
             totalSize,
             byRegistry,
-            oldest: oldest
+            oldest: oldest !== undefined
               ? {
                   name: oldest.spec.name,
                   lastAccessed: oldest.lastAccessedAt,
                 }
               : null,
-            newest: newest
+            newest: newest !== undefined
               ? {
                   name: newest.spec.name,
                   lastAccessed: newest.lastAccessedAt,
@@ -89,11 +89,11 @@ export const stats = Command.make("stats", { json: jsonOption }, ({ json }) =>
       `  ${"Total".padEnd(10)} ${String(totalCount).padStart(5)} repos  ${formatBytes(totalSize).padStart(10)}`
     )
 
-    if (oldest) {
+    if (oldest !== undefined) {
       yield* Console.log("")
       yield* Console.log(`Oldest: ${oldest.spec.name} (${oldest.lastAccessedAt})`)
     }
-    if (newest) {
+    if (newest !== undefined) {
       yield* Console.log(`Newest: ${newest.spec.name} (${newest.lastAccessedAt})`)
     }
   })

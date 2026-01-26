@@ -1,3 +1,4 @@
+// @effect-diagnostics strictEffectProvide:off
 import { Command } from "@effect/cli"
 import { BunContext } from "@effect/platform-bun"
 import { Effect, Either, Layer, Ref } from "effect"
@@ -41,7 +42,7 @@ function assertSequenceContains(actual: RecordedCall[], expected: ExpectedCall[]
       actualIndex++
 
       if (act.service === exp.service && act.method === exp.method) {
-        if (exp.match) {
+        if (exp.match !== undefined) {
           expect(act.args).toMatchObject(exp.match)
         }
         found = true

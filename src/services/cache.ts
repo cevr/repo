@@ -3,7 +3,7 @@ import { Context, Effect, Layer, Option } from "effect"
 import type { PackageSpec } from "../types.js"
 
 // Service interface
-export class CacheService extends Context.Tag("@repo/CacheService")<
+export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheService")<
   CacheService,
   {
     readonly cacheDir: string

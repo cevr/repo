@@ -20,7 +20,7 @@ export const remove = Command.make("remove", { spec: specArg }, ({ spec }) =>
 
     // Find in metadata
     const existing = yield* metadata.find(parsedSpec)
-    if (!existing) {
+    if (existing === null) {
       yield* Console.log(`Not found: ${specToString(parsedSpec)}`)
       return
     }

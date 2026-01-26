@@ -1,3 +1,4 @@
+// @effect-diagnostics strictEffectProvide:off
 import { Effect, Option, Ref } from "effect"
 import { describe, expect, it } from "@effect/vitest"
 import { runCli, createTestLayer } from "../src/test-utils/index.js"

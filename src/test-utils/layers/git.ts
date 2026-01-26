@@ -42,7 +42,7 @@ export function createMockGitService(options: CreateMockGitServiceOptions = {}):
   const stateRef = Ref.unsafeMake(state)
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
-    sequenceRef ? recordCall(sequenceRef, { service: "git", method, args, result }) : Effect.void
+    sequenceRef !== undefined ? recordCall(sequenceRef, { service: "git", method, args, result }) : Effect.void
 
   const layer = Layer.succeed(
     GitService,
@@ -51,8 +51,8 @@ export function createMockGitService(options: CreateMockGitServiceOptions = {}):
         Effect.gen(function* () {
           yield* record("clone", { url, dest, options })
           const entry: { url: string; ref?: string; depth?: number } = { url }
-          if (options?.ref) entry.ref = options.ref
-          if (options?.depth) entry.depth = options.depth
+          if (options?.ref !== undefined) entry.ref = options.ref
+          if (options?.depth !== undefined) entry.depth = options.depth
           yield* Ref.update(stateRef, (s) => ({
             ...s,
             clonedRepos: new Map(s.clonedRepos).set(dest, entry),

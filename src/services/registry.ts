@@ -1,3 +1,4 @@
+// @effect-diagnostics strictEffectProvide:off
 import { Context, Effect, Layer, Option } from "effect"
 import type { PackageSpec, Registry } from "../types.js"
 import { SpecParseError, RegistryError, NetworkError } from "../types.js"
@@ -10,7 +11,7 @@ export interface FetchOptions {
 }
 
 // Service interface
-export class RegistryService extends Context.Tag("@repo/RegistryService")<
+export class RegistryService extends Context.Tag("@cvr/repo/services/registry/RegistryService")<
   RegistryService,
   {
     readonly parseSpec: (
@@ -90,7 +91,7 @@ export class RegistryService extends Context.Tag("@repo/RegistryService")<
             )
           )
 
-          const depth = options?.fullHistory ? undefined : 100
+          const depth = options?.fullHistory === true ? undefined : 100
 
           switch (spec.registry) {
             case "github":
@@ -121,9 +122,9 @@ type ParseResult = PackageSpec | { error: string }
 function parseGithubSpec(input: string): ParseResult {
   // Handle owner/repo@ref or owner/repo#ref
   const refMatch = input.match(/^([^@#]+)[@#](.+)$/)
-  if (refMatch) {
+  if (refMatch !== null) {
     const [, name, ref] = refMatch
-    if (!name?.includes("/")) {
+    if (name === undefined || !name.includes("/")) {
       return { error: "GitHub spec must be owner/repo format" }
     }
     return {
@@ -148,14 +149,14 @@ function parseNpmSpec(input: string): ParseResult {
   // Handle scoped packages: @scope/package@version
   if (input.startsWith("@")) {
     const match = input.match(/^(@[^@]+)(?:@(.+))?$/)
-    if (!match) {
+    if (match === null) {
       return { error: "Invalid scoped npm package spec" }
     }
     const [, name, version] = match
     return {
       registry: "npm" as Registry,
       name: name!,
-      version: version ? Option.some(version) : Option.none(),
+      version: version !== undefined ? Option.some(version) : Option.none(),
     }
   }
 
@@ -166,33 +167,33 @@ function parseNpmSpec(input: string): ParseResult {
   }
 
   const [name, version] = parts
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Package name is required" }
   }
 
   return {
     registry: "npm" as Registry,
     name,
-    version: version ? Option.some(version) : Option.none(),
+    version: version !== undefined ? Option.some(version) : Option.none(),
   }
 }
 
 function parsePypiSpec(input: string): ParseResult {
   // Handle package@version or package==version
   const match = input.match(/^([^@=]+)(?:[@=]=?(.+))?$/)
-  if (!match) {
+  if (match === null) {
     return { error: "Invalid PyPI package spec" }
   }
 
   const [, name, version] = match
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Package name is required" }
   }
 
   return {
     registry: "pypi" as Registry,
     name: name.trim(),
-    version: version ? Option.some(version.trim()) : Option.none(),
+    version: version !== undefined ? Option.some(version.trim()) : Option.none(),
   }
 }
 
@@ -203,14 +204,14 @@ function parseCratesSpec(input: string): ParseResult {
   }
 
   const [name, version] = parts
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Crate name is required" }
   }
 
   return {
     registry: "crates" as Registry,
     name: name.trim(),
-    version: version ? Option.some(version.trim()) : Option.none(),
+    version: version !== undefined ? Option.some(version.trim()) : Option.none(),
   }
 }
 
@@ -227,8 +228,8 @@ function fetchGithub(
     const ref = Option.getOrUndefined(spec.version)
 
     const cloneOptions: { depth?: number; ref?: string } = {}
-    if (depth) cloneOptions.depth = depth
-    if (ref) cloneOptions.ref = ref
+    if (depth !== undefined) cloneOptions.depth = depth
+    if (ref !== undefined) cloneOptions.ref = ref
 
     yield* git
       .clone(url, destPath, cloneOptions)
@@ -258,10 +259,10 @@ interface RepoInfo {
 function extractRepoInfo(
   repository: { type?: string; url?: string } | string | undefined
 ): RepoInfo | null {
-  if (!repository) return null
+  if (repository === undefined) return null
 
   const url = typeof repository === "string" ? repository : repository.url
-  if (!url) return null
+  if (url === undefined) return null
 
   // Patterns for each host
   const hostPatterns: Array<{ host: GitHost; pattern: RegExp }> = [
@@ -283,7 +284,7 @@ function extractRepoInfo(
 
   for (const { host, pattern } of hostPatterns) {
     const match = url.match(pattern)
-    if (match?.[1] && match?.[2]) {
+    if (match !== null && match[1] !== undefined && match[2] !== undefined) {
       return {
         host,
         owner: match[1],
@@ -323,8 +324,8 @@ function cloneFromRepoInfo(
     const url = getCloneUrl(info)
 
     const cloneOptions: { depth?: number; ref?: string } = {}
-    if (depth) cloneOptions.depth = depth
-    if (ref) cloneOptions.ref = ref
+    if (depth !== undefined) cloneOptions.depth = depth
+    if (ref !== undefined) cloneOptions.ref = ref
 
     yield* git
       .clone(url, destPath, cloneOptions)
@@ -357,13 +358,11 @@ function fetchNpm(
     })
 
     if (!response.ok) {
-      return yield* Effect.fail(
-        new RegistryError({
+      return yield* new RegistryError({
           registry: "npm",
           operation: "fetch-metadata",
           cause: new Error(`HTTP ${response.status}: ${response.statusText}`),
         })
-      )
     }
 
     const data = (yield* Effect.tryPromise({
@@ -388,20 +387,18 @@ function fetchNpm(
           ? version
           : data["dist-tags"]?.[version]
 
-    if (!resolvedVersion || !data.versions[resolvedVersion]) {
-      return yield* Effect.fail(
-        new RegistryError({
+    if (resolvedVersion === undefined || data.versions[resolvedVersion] === undefined) {
+      return yield* new RegistryError({
           registry: "npm",
           operation: "resolve-version",
           cause: new Error(`Version ${version} not found`),
         })
-      )
     }
 
     // Try to find source repo URL (GitHub, GitLab, etc.)
     const repoInfo = extractRepoInfo(data.repository)
 
-    if (repoInfo) {
+    if (repoInfo !== null) {
       // Try to clone from source repo first
       const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`
       const cloneResult = yield* cloneFromRepoInfo(
@@ -419,14 +416,12 @@ function fetchNpm(
 
     // Fallback: download tarball
     const tarballUrl = data.versions[resolvedVersion]?.dist?.tarball
-    if (!tarballUrl) {
-      return yield* Effect.fail(
-        new RegistryError({
+    if (tarballUrl === undefined) {
+      return yield* new RegistryError({
           registry: "npm",
           operation: "get-tarball-url",
           cause: new Error("No tarball URL found"),
         })
-      )
     }
 
     yield* downloadAndExtractTarball(tarballUrl, destPath, "npm")
@@ -440,7 +435,7 @@ function fetchPypi(
 ): Effect.Effect<void, RegistryError | NetworkError, GitService> {
   return Effect.gen(function* () {
     const version = Option.getOrUndefined(spec.version)
-    const url = version
+    const url = version !== undefined
       ? `https://pypi.org/pypi/${spec.name}/${version}/json`
       : `https://pypi.org/pypi/${spec.name}/json`
 
@@ -450,13 +445,11 @@ function fetchPypi(
     })
 
     if (!response.ok) {
-      return yield* Effect.fail(
-        new RegistryError({
+      return yield* new RegistryError({
           registry: "pypi",
           operation: "fetch-metadata",
           cause: new Error(`HTTP ${response.status}: ${response.statusText}`),
         })
-      )
     }
 
     const data = (yield* Effect.tryPromise({
@@ -479,7 +472,7 @@ function fetchPypi(
     // Try to find source repo URL first (GitHub, GitLab, etc.)
     const repoInfo = extractRepoInfoFromPypi(data.info)
 
-    if (repoInfo) {
+    if (repoInfo !== null) {
       // Try to clone from source repo first
       const resolvedVersion = data.info.version
       const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`
@@ -501,14 +494,12 @@ function fetchPypi(
     const wheel = data.urls.find((u) => u.packagetype === "bdist_wheel")
     const tarballUrl = sdist?.url ?? wheel?.url
 
-    if (!tarballUrl) {
-      return yield* Effect.fail(
-        new RegistryError({
+    if (tarballUrl === undefined) {
+      return yield* new RegistryError({
           registry: "pypi",
           operation: "get-download-url",
           cause: new Error("No source distribution found"),
         })
-      )
     }
 
     yield* downloadAndExtractTarball(tarballUrl, destPath, "pypi")
@@ -531,9 +522,9 @@ function extractRepoInfoFromPypi(info: {
   ]
 
   for (const url of urls) {
-    if (url) {
+    if (url !== undefined) {
       const result = extractRepoInfo(url)
-      if (result) return result
+      if (result !== null) return result
     }
   }
 
@@ -559,13 +550,11 @@ function fetchCrates(
     })
 
     if (!response.ok) {
-      return yield* Effect.fail(
-        new RegistryError({
+      return yield* new RegistryError({
           registry: "crates",
           operation: "fetch-metadata",
           cause: new Error(`HTTP ${response.status}: ${response.statusText}`),
         })
-      )
     }
 
     const data = (yield* Effect.tryPromise({
@@ -582,24 +571,22 @@ function fetchCrates(
     }
 
     const version = Option.getOrUndefined(spec.version)
-    const versionInfo = version
+    const versionInfo = version !== undefined
       ? data.versions.find((v) => v.num === version)
       : data.versions[0] // latest
 
-    if (!versionInfo) {
-      return yield* Effect.fail(
-        new RegistryError({
+    if (versionInfo === undefined) {
+      return yield* new RegistryError({
           registry: "crates",
           operation: "resolve-version",
           cause: new Error(`Version ${version ?? "latest"} not found`),
         })
-      )
     }
 
     // Try to find source repo URL first (GitHub, GitLab, etc.)
     const repoInfo = extractRepoInfo(data.crate.repository) ?? extractRepoInfo(data.crate.homepage)
 
-    if (repoInfo) {
+    if (repoInfo !== null) {
       // Try to clone from source repo first
       const resolvedVersion = versionInfo.num
       const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`
@@ -634,13 +621,11 @@ function downloadAndExtractTarball(
     })
 
     if (!response.ok) {
-      return yield* Effect.fail(
-        new RegistryError({
+      return yield* new RegistryError({
           registry,
           operation: "download-tarball",
           cause: new Error(`HTTP ${response.status}: ${response.statusText}`),
         })
-      )
     }
 
     const buffer = yield* Effect.tryPromise({
@@ -701,13 +686,11 @@ function downloadAndExtractTarball(
     }).pipe(Effect.ignore)
 
     if (exitCode !== 0) {
-      return yield* Effect.fail(
-        new RegistryError({
+      return yield* new RegistryError({
           registry,
           operation: "extract-tarball",
           cause: new Error(`tar exited with code ${exitCode}`),
         })
-      )
     }
   })
 }

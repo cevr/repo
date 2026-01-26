@@ -26,7 +26,7 @@ export const info = Command.make(
       const parsedSpec = yield* registry.parseSpec(spec)
       const existing = yield* metadata.find(parsedSpec)
 
-      if (!existing) {
+      if (existing === null) {
         yield* Console.error(`Not cached: ${specToString(parsedSpec)}`)
         return
       }
@@ -73,7 +73,7 @@ export const info = Command.make(
         yield* Console.log(
           `Accessed: ${formatRelativeTime(new Date(existing.lastAccessedAt))}`
         )
-        if (isGit && currentRef) {
+        if (isGit && currentRef !== null) {
           yield* Console.log(`Git ref:  ${currentRef}`)
         }
       }

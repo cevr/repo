@@ -22,7 +22,7 @@ const dryRunOption = Options.boolean("dry-run").pipe(
 
 function parseSize(sizeStr: string): number | null {
   const match = sizeStr.match(/^(\d+(?:\.\d+)?)\s*(B|K|KB|M|MB|G|GB)?$/i)
-  if (!match) return null
+  if (match === null) return null
 
   const value = parseFloat(match[1]!)
   const unit = (match[2] ?? "B").toUpperCase()

@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// @effect-diagnostics strictEffectProvide:off
 import { Command } from "@effect/cli"
 import { BunContext, BunRuntime } from "@effect/platform-bun"
 import { Effect, Layer } from "effect"

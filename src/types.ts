@@ -29,44 +29,44 @@ export const MetadataIndex = Schema.Struct({
 export type MetadataIndex = typeof MetadataIndex.Type
 
 // Tagged Errors
-export class SpecParseError extends Data.TaggedError("SpecParseError")<{
+export class SpecParseError extends Data.TaggedError("@cvr/repo/types/SpecParseError")<{
   readonly input: string
   readonly message: string
 }> {}
 
-export class RegistryError extends Data.TaggedError("RegistryError")<{
+export class RegistryError extends Data.TaggedError("@cvr/repo/types/RegistryError")<{
   readonly registry: Registry
   readonly operation: string
   readonly cause: unknown
 }> {}
 
-export class GitError extends Data.TaggedError("GitError")<{
+export class GitError extends Data.TaggedError("@cvr/repo/types/GitError")<{
   readonly operation: string
   readonly repo: string
   readonly cause: unknown
 }> {}
 
-export class CacheError extends Data.TaggedError("CacheError")<{
+export class CacheError extends Data.TaggedError("@cvr/repo/types/CacheError")<{
   readonly operation: string
   readonly path: string
   readonly cause: unknown
 }> {}
 
-export class MetadataError extends Data.TaggedError("MetadataError")<{
+export class MetadataError extends Data.TaggedError("@cvr/repo/types/MetadataError")<{
   readonly operation: string
   readonly cause: unknown
 }> {}
 
-export class NotFoundError extends Data.TaggedError("NotFoundError")<{
+export class NotFoundError extends Data.TaggedError("@cvr/repo/types/NotFoundError")<{
   readonly spec: PackageSpec
 }> {}
 
-export class NetworkError extends Data.TaggedError("NetworkError")<{
+export class NetworkError extends Data.TaggedError("@cvr/repo/types/NetworkError")<{
   readonly url: string
   readonly cause: unknown
 }> {}
 
-export class OpenError extends Data.TaggedError("OpenError")<{
+export class OpenError extends Data.TaggedError("@cvr/repo/types/OpenError")<{
   readonly command: string
   readonly cause: unknown
 }> {}

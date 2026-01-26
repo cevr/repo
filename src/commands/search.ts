@@ -81,7 +81,7 @@ export const search = Command.make(
         catch: () => "", // ripgrep returns non-zero when no matches
       })
 
-      if (output.trim()) {
+      if (output.trim().length > 0) {
         yield* Console.log(output)
       } else {
         yield* Console.log("No matches found.")

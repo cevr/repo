@@ -2,7 +2,7 @@ import { Context, Effect, Layer } from "effect"
 import { GitError } from "../types.js"
 
 // Service interface
-export class GitService extends Context.Tag("@repo/GitService")<
+export class GitService extends Context.Tag("@cvr/repo/services/git/GitService")<
   GitService,
   {
     readonly clone: (
@@ -24,11 +24,11 @@ export class GitService extends Context.Tag("@repo/GitService")<
         Effect.gen(function* () {
           const args = ["clone"]
 
-          if (options?.depth) {
+          if (options?.depth !== undefined) {
             args.push("--depth", String(options.depth))
           }
 
-          if (options?.ref) {
+          if (options?.ref !== undefined) {
             args.push("--branch", options.ref)
           }
 
@@ -47,9 +47,9 @@ export class GitService extends Context.Tag("@repo/GitService")<
 
           if (exitCode !== 0) {
             // If ref failed, try without it (fallback to default branch)
-            if (options?.ref) {
+            if (options?.ref !== undefined) {
               const fallbackArgs = ["clone"]
-              if (options.depth) {
+              if (options.depth !== undefined) {
                 fallbackArgs.push("--depth", String(options.depth))
               }
               fallbackArgs.push(url, dest)
@@ -70,24 +70,20 @@ export class GitService extends Context.Tag("@repo/GitService")<
               })
 
               if (fallbackResult !== 0) {
-                return yield* Effect.fail(
-                  new GitError({
-                    operation: "clone",
-                    repo: url,
-                    cause: new Error(
-                      `git clone failed with exit code ${fallbackResult}`
-                    ),
-                  })
-                )
-              }
-            } else {
-              return yield* Effect.fail(
-                new GitError({
+                return yield* new GitError({
                   operation: "clone",
                   repo: url,
-                  cause: new Error(`git clone failed with exit code ${exitCode}`),
+                  cause: new Error(
+                    `git clone failed with exit code ${fallbackResult}`
+                  ),
                 })
-              )
+              }
+            } else {
+              return yield* new GitError({
+                operation: "clone",
+                repo: url,
+                cause: new Error(`git clone failed with exit code ${exitCode}`),
+              })
             }
           }
         }),
@@ -107,13 +103,11 @@ export class GitService extends Context.Tag("@repo/GitService")<
           })
 
           if (fetchExit !== 0) {
-            return yield* Effect.fail(
-              new GitError({
-                operation: "fetch",
-                repo: path,
-                cause: new Error(`git fetch failed with exit code ${fetchExit}`),
-              })
-            )
+            return yield* new GitError({
+              operation: "fetch",
+              repo: path,
+              cause: new Error(`git fetch failed with exit code ${fetchExit}`),
+            })
           }
 
           // Reset to origin/HEAD (or current branch's upstream)
@@ -148,13 +142,11 @@ export class GitService extends Context.Tag("@repo/GitService")<
             })
 
             if (upstreamExit !== 0) {
-              return yield* Effect.fail(
-                new GitError({
-                  operation: "reset",
-                  repo: path,
-                  cause: new Error(`git reset failed with exit code ${upstreamExit}`),
-                })
-              )
+              return yield* new GitError({
+                operation: "reset",
+                repo: path,
+                cause: new Error(`git reset failed with exit code ${upstreamExit}`),
+              })
             }
           }
         }),
@@ -192,7 +184,7 @@ export class GitService extends Context.Tag("@repo/GitService")<
 
           // Parse output like: ref: refs/heads/main\tHEAD
           const match = output.match(/ref: refs\/heads\/(\S+)/)
-          if (match?.[1]) {
+          if (match !== null && match[1] !== undefined) {
             return match[1]
           }
           return "main" // fallback
@@ -218,7 +210,7 @@ export class GitService extends Context.Tag("@repo/GitService")<
               new GitError({ operation: "getCurrentRef", repo: path, cause }),
           })
 
-          return output || "unknown"
+          return output.length > 0 ? output : "unknown"
         }),
     })
   )

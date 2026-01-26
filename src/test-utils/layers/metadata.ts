@@ -39,7 +39,7 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
   const stateRef = Ref.unsafeMake(state)
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
-    sequenceRef ? recordCall(sequenceRef, { service: "metadata", method, args, result }) : Effect.void
+    sequenceRef !== undefined ? recordCall(sequenceRef, { service: "metadata", method, args, result }) : Effect.void
 
   const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
     if (a.registry !== b.registry || a.name !== b.name) return false

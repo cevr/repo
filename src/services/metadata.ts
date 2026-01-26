@@ -8,7 +8,7 @@ const encodeMetadata = Schema.encodeSync(MetadataIndex)
 const decodeMetadata = Schema.decodeUnknownSync(MetadataIndex)
 
 // Service interface
-export class MetadataService extends Context.Tag("@repo/MetadataService")<
+export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/MetadataService")<
   MetadataService,
   {
     readonly load: () => Effect.Effect<MetadataIndex>

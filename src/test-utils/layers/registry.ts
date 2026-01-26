@@ -37,7 +37,7 @@ export function createMockRegistryService(options: CreateMockRegistryServiceOpti
   const stateRef = Ref.unsafeMake(state)
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
-    sequenceRef ? recordCall(sequenceRef, { service: "registry", method, args, result }) : Effect.void
+    sequenceRef !== undefined ? recordCall(sequenceRef, { service: "registry", method, args, result }) : Effect.void
 
   const layer = Layer.succeed(
     RegistryService,
@@ -74,9 +74,9 @@ type ParseResult = PackageSpec | { error: string }
 
 function parseGithubSpec(input: string): ParseResult {
   const refMatch = input.match(/^([^@#]+)[@#](.+)$/)
-  if (refMatch) {
+  if (refMatch !== null) {
     const [, name, ref] = refMatch
-    if (!name?.includes("/")) {
+    if (name === undefined || !name.includes("/")) {
       return { error: "GitHub spec must be owner/repo format" }
     }
     return {
@@ -100,14 +100,14 @@ function parseGithubSpec(input: string): ParseResult {
 function parseNpmSpec(input: string): ParseResult {
   if (input.startsWith("@")) {
     const match = input.match(/^(@[^@]+)(?:@(.+))?$/)
-    if (!match) {
+    if (match === null) {
       return { error: "Invalid scoped npm package spec" }
     }
     const [, name, version] = match
     return {
       registry: "npm" as Registry,
       name: name!,
-      version: version ? Option.some(version) : Option.none(),
+      version: version !== undefined ? Option.some(version) : Option.none(),
     }
   }
 
@@ -117,32 +117,32 @@ function parseNpmSpec(input: string): ParseResult {
   }
 
   const [name, version] = parts
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Package name is required" }
   }
 
   return {
     registry: "npm" as Registry,
     name,
-    version: version ? Option.some(version) : Option.none(),
+    version: version !== undefined ? Option.some(version) : Option.none(),
   }
 }
 
 function parsePypiSpec(input: string): ParseResult {
   const match = input.match(/^([^@=]+)(?:[@=]=?(.+))?$/)
-  if (!match) {
+  if (match === null) {
     return { error: "Invalid PyPI package spec" }
   }
 
   const [, name, version] = match
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Package name is required" }
   }
 
   return {
     registry: "pypi" as Registry,
     name: name.trim(),
-    version: version ? Option.some(version.trim()) : Option.none(),
+    version: version !== undefined ? Option.some(version.trim()) : Option.none(),
   }
 }
 
@@ -153,14 +153,14 @@ function parseCratesSpec(input: string): ParseResult {
   }
 
   const [name, version] = parts
-  if (!name) {
+  if (name === undefined || name.length === 0) {
     return { error: "Crate name is required" }
   }
 
   return {
     registry: "crates" as Registry,
     name: name.trim(),
-    version: version ? Option.some(version.trim()) : Option.none(),
+    version: version !== undefined ? Option.some(version.trim()) : Option.none(),
   }
 }
 

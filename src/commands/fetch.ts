@@ -47,7 +47,7 @@ export const fetch = Command.make(
       const existing = yield* metadata.find(parsedSpec)
       const destPath = yield* cache.getPath(parsedSpec)
 
-      if (existing) {
+      if (existing !== null) {
         const isGit = yield* git.isGitRepo(existing.path)
 
         if (force) {
