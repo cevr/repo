@@ -1,9 +1,10 @@
-import { Layer, Ref } from "effect"
+import type { Ref } from "effect";
+import { Layer } from "effect";
 
-import type { CacheService } from "../services/cache.js"
-import type { GitService } from "../services/git.js"
-import type { MetadataService } from "../services/metadata.js"
-import type { RegistryService } from "../services/registry.js"
+import type { CacheService } from "../services/cache.js";
+import type { GitService } from "../services/git.js";
+import type { MetadataService } from "../services/metadata.js";
+import type { RegistryService } from "../services/registry.js";
 import {
   createMockCacheService,
   createMockGitService,
@@ -13,46 +14,46 @@ import {
   type MockGitState,
   type MockMetadataState,
   type MockRegistryState,
-} from "./layers/index.js"
-import { createSequenceRef, type RecordedCall } from "./sequence.js"
+} from "./layers/index.js";
+import { createSequenceRef, type RecordedCall } from "./sequence.js";
 
 // ─── Re-exports ────────────────────────────────────────────────────────────────
 
-export * from "./layers/index.js"
-export * from "./sequence.js"
-export * from "./run-cli.js"
+export * from "./layers/index.js";
+export * from "./sequence.js";
+export * from "./run-cli.js";
 
 // ─── Test Layer Types ──────────────────────────────────────────────────────────
 
 /** All services provided by the test layer */
-export type TestServices = GitService | CacheService | MetadataService | RegistryService
+export type TestServices = GitService | CacheService | MetadataService | RegistryService;
 
 // ─── Test Layer Composition ────────────────────────────────────────────────────
 
 export interface CreateTestLayerOptions {
   /** Initial git state */
-  git?: Partial<MockGitState>
+  git?: Partial<MockGitState>;
   /** Initial cache state */
-  cache?: Partial<MockCacheState>
+  cache?: Partial<MockCacheState>;
   /** Initial metadata state */
-  metadata?: Partial<MockMetadataState>
+  metadata?: Partial<MockMetadataState>;
   /** Initial registry state */
-  registry?: Partial<MockRegistryState>
+  registry?: Partial<MockRegistryState>;
 }
 
 export interface TestLayerResult {
   /** Combined layer providing all test services */
-  layer: Layer.Layer<TestServices>
+  layer: Layer.Layer<TestServices>;
   /** Git mock utilities for state inspection */
-  git: ReturnType<typeof createMockGitService>
+  git: ReturnType<typeof createMockGitService>;
   /** Cache mock utilities for state inspection */
-  cache: ReturnType<typeof createMockCacheService>
+  cache: ReturnType<typeof createMockCacheService>;
   /** Metadata mock utilities for state inspection */
-  metadata: ReturnType<typeof createMockMetadataService>
+  metadata: ReturnType<typeof createMockMetadataService>;
   /** Registry mock utilities for state inspection */
-  registry: ReturnType<typeof createMockRegistryService>
+  registry: ReturnType<typeof createMockRegistryService>;
   /** Sequence ref for recording all service calls in order */
-  sequenceRef: Ref.Ref<RecordedCall[]>
+  sequenceRef: Ref.Ref<RecordedCall[]>;
 }
 
 /**
@@ -77,26 +78,26 @@ export interface TestLayerResult {
  * ```
  */
 export function createTestLayer(options: CreateTestLayerOptions = {}): TestLayerResult {
-  const sequenceRef = createSequenceRef()
+  const sequenceRef = createSequenceRef();
 
   const git = createMockGitService({
     ...(options.git && { initialState: options.git }),
     sequenceRef,
-  })
+  });
   const cache = createMockCacheService({
     ...(options.cache && { initialState: options.cache }),
     sequenceRef,
-  })
+  });
   const metadata = createMockMetadataService({
     ...(options.metadata && { initialState: options.metadata }),
     sequenceRef,
-  })
+  });
   const registry = createMockRegistryService({
     ...(options.registry && { initialState: options.registry }),
     sequenceRef,
-  })
+  });
 
-  const layer = Layer.mergeAll(git.layer, cache.layer, metadata.layer, registry.layer)
+  const layer = Layer.mergeAll(git.layer, cache.layer, metadata.layer, registry.layer);
 
   return {
     layer,
@@ -105,5 +106,5 @@ export function createTestLayer(options: CreateTestLayerOptions = {}): TestLayer
     metadata,
     registry,
     sequenceRef,
-  }
+  };
 }

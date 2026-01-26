@@ -1,4 +1,5 @@
-import { Effect, Ref } from "effect"
+import type { Effect } from "effect";
+import { Ref } from "effect";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -8,13 +9,13 @@ import { Effect, Ref } from "effect"
  */
 export interface RecordedCall {
   /** Service name (e.g., 'git', 'cache', 'registry') */
-  service: string
+  service: string;
   /** Method name (e.g., 'clone', 'getPath', 'parseSpec') */
-  method: string
+  method: string;
   /** Arguments passed to the method */
-  args: unknown
+  args: unknown;
   /** Return value (optional, for debugging) */
-  result?: unknown
+  result?: unknown;
 }
 
 /**
@@ -22,21 +23,21 @@ export interface RecordedCall {
  * Uses partial matching - only specified fields are checked.
  */
 export interface ExpectedCall {
-  service: string
-  method: string
+  service: string;
+  method: string;
   /** Partial match on args - uses expect().toMatchObject() */
-  match?: Record<string, unknown>
+  match?: Record<string, unknown>;
 }
 
 // ─── Sequence Ref ─────────────────────────────────────────────────────────────
 
-export type SequenceRef = Ref.Ref<RecordedCall[]>
+export type SequenceRef = Ref.Ref<RecordedCall[]>;
 
 /**
  * Create a new sequence ref for recording calls.
  */
 export function createSequenceRef(): SequenceRef {
-  return Ref.unsafeMake<RecordedCall[]>([])
+  return Ref.unsafeMake<RecordedCall[]>([]);
 }
 
 /**
@@ -44,14 +45,14 @@ export function createSequenceRef(): SequenceRef {
  */
 export function recordCall(
   sequenceRef: SequenceRef,
-  call: Omit<RecordedCall, "result"> & { result?: unknown }
+  call: Omit<RecordedCall, "result"> & { result?: unknown },
 ): Effect.Effect<void> {
-  return Ref.update(sequenceRef, (seq) => [...seq, call])
+  return Ref.update(sequenceRef, (seq) => [...seq, call]);
 }
 
 /**
  * Get all recorded calls.
  */
 export function getSequence(sequenceRef: SequenceRef): Effect.Effect<RecordedCall[]> {
-  return Ref.get(sequenceRef)
+  return Ref.get(sequenceRef);
 }

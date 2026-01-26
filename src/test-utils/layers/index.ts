@@ -6,7 +6,7 @@ export {
   MockGitServiceDefault,
   type CreateMockGitServiceOptions,
   type MockGitState,
-} from "./git.js"
+} from "./git.js";
 
 export {
   createMockCacheService,
@@ -14,7 +14,7 @@ export {
   MockCacheServiceDefault,
   type CreateMockCacheServiceOptions,
   type MockCacheState,
-} from "./cache.js"
+} from "./cache.js";
 
 export {
   createMockMetadataService,
@@ -22,7 +22,7 @@ export {
   MockMetadataServiceDefault,
   type CreateMockMetadataServiceOptions,
   type MockMetadataState,
-} from "./metadata.js"
+} from "./metadata.js";
 
 export {
   createMockRegistryService,
@@ -30,4 +30,4 @@ export {
   MockRegistryServiceDefault,
   type CreateMockRegistryServiceOptions,
   type MockRegistryState,
-} from "./registry.js"
+} from "./registry.js";
