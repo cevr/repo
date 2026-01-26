@@ -83,7 +83,8 @@ function parseGithubSpec(input: string): ParseResult {
     }
     return {
       registry: "github" as Registry,
-      name: name,
+      // Normalize to lowercase for case-insensitive matching
+      name: name.toLowerCase(),
       // ref is guaranteed to exist when refMatch matches
       version: Option.some(ref as string),
     };
@@ -95,7 +96,8 @@ function parseGithubSpec(input: string): ParseResult {
 
   return {
     registry: "github" as Registry,
-    name: input,
+    // Normalize to lowercase for case-insensitive matching
+    name: input.toLowerCase(),
     version: Option.none(),
   };
 }
