@@ -1,27 +1,29 @@
 import { Args, Command, Options } from "@effect/cli";
-import { Console, Effect, Option, Schema } from "effect";
+import { Console, Effect, Option } from "effect";
 import { OpenError, specToString } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
+import { handleCommandError } from "./shared.js";
 
 const specArg = Args.text({ name: "spec" }).pipe(Args.withDescription("Package spec to open"));
 
-const finderOption = Options.boolean("finder").pipe(
-  Options.withAlias("f"),
-  Options.withDefault(false),
-  Options.withDescription("Open in Finder instead of editor"),
-);
-
-const editorOption = Options.text("editor").pipe(
-  Options.withAlias("e"),
+// Target: "finder" | "editor" | custom editor command
+// --with finder  -> open in Finder
+// --with code    -> open in VS Code
+// --with vim     -> open in vim
+// (no option)    -> use $EDITOR or "code"
+const withOption = Options.text("with").pipe(
+  Options.withAlias("w"),
   Options.optional,
-  Options.withDescription("Editor to use (defaults to $EDITOR or code)"),
+  Options.withDescription(
+    'Target: "finder" for Finder, or editor command (default: $EDITOR or code)',
+  ),
 );
 
 export const open = Command.make(
   "open",
-  { spec: specArg, finder: finderOption, editor: editorOption },
-  ({ spec, finder, editor }) =>
+  { spec: specArg, with: withOption },
+  ({ spec, with: target }) =>
     Effect.gen(function* () {
       const registry = yield* RegistryService;
       const metadata = yield* MetadataService;
@@ -40,7 +42,10 @@ export const open = Command.make(
       // Update access time
       yield* metadata.updateAccessTime(parsedSpec);
 
-      if (finder) {
+      // Determine target
+      const targetValue = Option.getOrElse(target, () => process.env.EDITOR ?? "code");
+
+      if (targetValue === "finder") {
         // Open in Finder (macOS)
         const proc = Bun.spawn(["open", existing.path], {
           stdout: "pipe",
@@ -56,9 +61,7 @@ export const open = Command.make(
         yield* Console.log(`Opened in Finder: ${existing.path}`);
       } else {
         // Open in editor
-        const editorCmd = Option.isSome(editor) ? editor.value : (process.env.EDITOR ?? "code");
-
-        const proc = Bun.spawn([editorCmd, existing.path], {
+        const proc = Bun.spawn([targetValue, existing.path], {
           stdout: "pipe",
           stderr: "pipe",
         });
@@ -67,20 +70,9 @@ export const open = Command.make(
             proc.exited.then((code) => {
               if (code !== 0) throw new Error(`exit code ${code}`);
             }),
-          catch: (e) => new OpenError({ command: editorCmd, cause: e }),
+          catch: (e) => new OpenError({ command: targetValue, cause: e }),
         });
-        yield* Console.log(`Opened in ${editorCmd}: ${existing.path}`);
+        yield* Console.log(`Opened in ${targetValue}: ${existing.path}`);
       }
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.gen(function* () {
-          if (typeof error === "object" && error !== null && "_tag" in error) {
-            const jsonStr = yield* Schema.encode(Schema.parseJson())(error);
-            yield* Console.error(`Error: ${(error as { _tag: string })._tag}: ${jsonStr}`);
-          } else {
-            yield* Console.error(`Error: ${String(error)}`);
-          }
-        }),
-      ),
-    ),
+    }).pipe(Effect.catchAll(handleCommandError)),
 );

@@ -48,7 +48,8 @@ describe("fetch command", () => {
           ["/tmp/test-repo-cache/vercel/next.js", { url: "https://github.com/vercel/next.js.git" }],
         ]);
 
-        const sequence = yield* runCli("fetch vercel/next.js", {
+        // --update flag is required to trigger update behavior
+        const sequence = yield* runCli("fetch --update vercel/next.js", {
           git: { clonedRepos: gitState },
           metadata: {
             index: {

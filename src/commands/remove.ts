@@ -4,6 +4,7 @@ import { specToString, formatBytes } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
+import { handleCommandError } from "./shared.js";
 
 const specArg = Args.text({ name: "spec" }).pipe(Args.withDescription("Package spec to remove"));
 
@@ -31,7 +32,5 @@ export const remove = Command.make("remove", { spec: specArg }, ({ spec }) =>
 
     yield* Console.log(`Removed: ${specToString(parsedSpec)}`);
     yield* Console.log(`Freed: ${formatBytes(existing.sizeBytes)}`);
-  }).pipe(
-    Effect.catchAll((error) => Console.error(`Error: ${error._tag}: ${JSON.stringify(error)}`)),
-  ),
+  }).pipe(Effect.catchAll(handleCommandError)),
 );

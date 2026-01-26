@@ -4,6 +4,7 @@ import { specToString, formatBytes, formatRelativeTime } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
+import { handleCommandError } from "./shared.js";
 
 const specArg = Args.text({ name: "spec" }).pipe(
   Args.withDescription("Package spec to get info for"),
@@ -66,5 +67,5 @@ export const info = Command.make("info", { spec: specArg, json: jsonOption }, ({
     }
 
     yield* metadata.updateAccessTime(parsedSpec);
-  }),
+  }).pipe(Effect.catchAll(handleCommandError)),
 );

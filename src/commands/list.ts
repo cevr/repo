@@ -2,6 +2,7 @@ import { Command, Options } from "@effect/cli";
 import { Console, Effect, Option, Schema } from "effect";
 import { formatBytes, formatRelativeTime, specToString } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
+import { handleCommandError } from "./shared.js";
 
 const registryOption = Options.choice("registry", [
   "github",
@@ -90,5 +91,5 @@ export const list = Command.make(
       yield* Console.log("═".repeat(80));
       const totalSize = sorted.reduce((sum, r) => sum + r.sizeBytes, 0);
       yield* Console.log(`Total: ${formatBytes(totalSize)}`);
-    }),
+    }).pipe(Effect.catchAll(handleCommandError)),
 );

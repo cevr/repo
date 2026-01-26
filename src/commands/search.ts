@@ -1,6 +1,7 @@
 import { Args, Command, Options } from "@effect/cli";
-import { Console, Effect, Option, Schema } from "effect";
+import { Console, Effect, Option } from "effect";
 import { MetadataService } from "../services/metadata.js";
+import { handleCommandError } from "./shared.js";
 
 const queryArg = Args.text({ name: "query" }).pipe(
   Args.withDescription("Search pattern (regex supported)"),
@@ -84,16 +85,5 @@ export const search = Command.make(
       } else {
         yield* Console.log("No matches found.");
       }
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.gen(function* () {
-          if (typeof error === "object" && error !== null && "_tag" in error) {
-            const jsonStr = yield* Schema.encode(Schema.parseJson())(error);
-            yield* Console.error(`Error: ${(error as { _tag: string })._tag}: ${jsonStr}`);
-          } else {
-            yield* Console.error(`Error: ${String(error)}`);
-          }
-        }),
-      ),
-    ),
+    }).pipe(Effect.catchAll(handleCommandError)),
 );

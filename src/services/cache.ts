@@ -24,8 +24,14 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
       const home = process.env.HOME ?? "~";
       const cacheDir = pathService.join(home, ".cache", "repo");
 
-      // Ensure cache root exists
-      yield* fs.makeDirectory(cacheDir, { recursive: true }).pipe(Effect.ignore);
+      // Ensure cache root exists (recursive mkdir doesn't fail on AlreadyExists)
+      yield* fs
+        .makeDirectory(cacheDir, { recursive: true })
+        .pipe(
+          Effect.catchTag("SystemError", (e) =>
+            e.reason === "AlreadyExists" ? Effect.void : Effect.fail(e),
+          ),
+        );
 
       const getPath = (spec: PackageSpec) =>
         Effect.sync(() => {
@@ -92,7 +98,12 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
         }).pipe(Effect.orElse(() => Effect.succeed(0)));
 
       const ensureDir = (path: string) =>
-        fs.makeDirectory(path, { recursive: true }).pipe(Effect.ignore);
+        fs.makeDirectory(path, { recursive: true }).pipe(
+          Effect.catchTag("SystemError", (e) =>
+            e.reason === "AlreadyExists" ? Effect.void : Effect.fail(e),
+          ),
+          Effect.orElse(() => Effect.void),
+        );
 
       return CacheService.of({
         cacheDir,

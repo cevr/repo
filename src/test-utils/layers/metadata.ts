@@ -78,6 +78,19 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
           });
         }),
 
+      addMany: (metadataList) =>
+        Effect.gen(function* () {
+          yield* record("addMany", { metadataList });
+          yield* Ref.update(stateRef, (s) => {
+            let repos = [...s.index.repos];
+            for (const metadata of metadataList) {
+              repos = repos.filter((r) => !specMatches(r.spec, metadata.spec));
+              repos.push(metadata);
+            }
+            return { ...s, index: { ...s.index, repos } };
+          });
+        }),
+
       remove: (spec) =>
         Effect.gen(function* () {
           const s = yield* Ref.get(stateRef);
@@ -90,6 +103,22 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
             index: { ...s.index, repos: filtered },
           });
           return result;
+        }),
+
+      removeMany: (specs) =>
+        Effect.gen(function* () {
+          const s = yield* Ref.get(stateRef);
+          const originalLength = s.index.repos.length;
+          const filtered = s.index.repos.filter(
+            (r) => !specs.some((spec) => specMatches(r.spec, spec)),
+          );
+          const removedCount = originalLength - filtered.length;
+          yield* record("removeMany", { specs }, removedCount);
+          yield* Ref.set(stateRef, {
+            ...s,
+            index: { ...s.index, repos: filtered },
+          });
+          return removedCount;
         }),
 
       find: (spec) =>
@@ -140,6 +169,8 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
           yield* record("all", {}, s.index.repos);
           return s.index.repos;
         }),
+
+      flush: () => record("flush", {}),
     }),
   );
 

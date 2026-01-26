@@ -1,10 +1,11 @@
 import { Args, Command, Options } from "@effect/cli";
-import { Console, Effect, Schema } from "effect";
+import { Console, Effect } from "effect";
 import { formatBytes, specToString } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
+import { handleCommandError } from "./shared.js";
 
 const specArg = Args.text({ name: "spec" }).pipe(
   Args.withDescription(
@@ -55,8 +56,8 @@ export const fetch = Command.make(
           yield* Console.log(`Force re-fetching ${specStr}...`);
           yield* cache.remove(existing.path);
           yield* metadata.remove(parsedSpec);
-        } else if (update || isGit) {
-          // Update existing git repo
+        } else if (update) {
+          // Explicit update requested
           if (isGit) {
             yield* Console.log(`Updating ${specStr}...`);
             yield* git
@@ -86,7 +87,7 @@ export const fetch = Command.make(
             yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
             return;
           } else {
-            // Not a git repo, just report it exists
+            // Not a git repo, can't update
             yield* metadata.updateAccessTime(parsedSpec);
             yield* Console.log(`Already cached at: ${existing.path}`);
             yield* Console.log(`Size: ${formatBytes(existing.sizeBytes)}`);
@@ -140,16 +141,5 @@ export const fetch = Command.make(
 
       yield* Console.log(`Fetched to: ${destPath}`);
       yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
-    }).pipe(
-      Effect.catchAll((error) =>
-        Effect.gen(function* () {
-          if (typeof error === "object" && error !== null && "_tag" in error) {
-            const jsonStr = yield* Schema.encode(Schema.parseJson())(error);
-            yield* Console.error(`Error: ${error._tag}: ${jsonStr}`);
-          } else {
-            yield* Console.error(`Error: ${String(error)}`);
-          }
-        }),
-      ),
-    ),
+    }).pipe(Effect.catchAll(handleCommandError)),
 );

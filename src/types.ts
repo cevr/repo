@@ -3,7 +3,49 @@ import { Data, Schema } from "effect";
 // Registry types
 export type Registry = "github" | "npm" | "pypi" | "crates";
 
+// ─── Branded Name Types ───────────────────────────────────────────────────────
+
+// GitHub repo name: owner/repo format (lowercase after parsing normalization)
+export const GitHubRepoName = Schema.String.pipe(
+  Schema.pattern(/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i),
+  Schema.brand("GitHubRepoName"),
+);
+export type GitHubRepoName = typeof GitHubRepoName.Type;
+
+// npm package name: @scope/package or package
+export const NpmPackageName = Schema.String.pipe(
+  Schema.pattern(/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/),
+  Schema.brand("NpmPackageName"),
+);
+export type NpmPackageName = typeof NpmPackageName.Type;
+
+// PyPI package name: letters, numbers, hyphens, underscores, dots
+export const PypiPackageName = Schema.String.pipe(
+  Schema.pattern(/^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/),
+  Schema.brand("PypiPackageName"),
+);
+export type PypiPackageName = typeof PypiPackageName.Type;
+
+// Crates.io crate name: letters, numbers, hyphens, underscores
+export const CratesPackageName = Schema.String.pipe(
+  Schema.pattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/),
+  Schema.brand("CratesPackageName"),
+);
+export type CratesPackageName = typeof CratesPackageName.Type;
+
+// Union of all valid package names (for loose validation)
+export const PackageName = Schema.Union(
+  GitHubRepoName,
+  NpmPackageName,
+  PypiPackageName,
+  CratesPackageName,
+);
+export type PackageName = typeof PackageName.Type;
+
+// ─── Package Spec ─────────────────────────────────────────────────────────────
+
 // Package spec - identifies a package/repo across registries
+// Uses plain string for name to allow parsing to handle validation
 export const PackageSpec = Schema.Struct({
   registry: Schema.Literal("github", "npm", "pypi", "crates"),
   name: Schema.String,
