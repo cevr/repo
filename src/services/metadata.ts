@@ -41,7 +41,11 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
       const cacheRef = yield* Ref.make<CacheState>({ index: null, dirty: false });
 
       const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
-        if (a.registry !== b.registry || a.name !== b.name) return false;
+        if (a.registry !== b.registry) return false;
+        // GitHub repos are case-insensitive (legacy cached repos may have different casing)
+        const aName = a.registry === "github" ? a.name.toLowerCase() : a.name;
+        const bName = b.registry === "github" ? b.name.toLowerCase() : b.name;
+        if (aName !== bName) return false;
         const aVersion = Option.getOrElse(a.version, () => "");
         const bVersion = Option.getOrElse(b.version, () => "");
         return aVersion === bVersion;

@@ -34,23 +34,53 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
         );
 
       const getPath = (spec: PackageSpec) =>
-        Effect.sync(() => {
+        Effect.gen(function* () {
           // All repos stored as: ~/.cache/repo/{name}[@version]
           // GitHub: owner/repo -> ~/.cache/repo/owner/repo
           // npm: package@version -> ~/.cache/repo/package/version (or package/default)
           // pypi/crates: same pattern
           const version = Option.getOrElse(spec.version, () => "default");
           switch (spec.registry) {
-            case "github":
+            case "github": {
               // GitHub repos don't have versions in path (use git refs)
-              return pathService.join(cacheDir, spec.name);
+              const normalizedPath = pathService.join(cacheDir, spec.name);
+
+              // Fast path: normalized path exists
+              if (yield* fs.exists(normalizedPath)) return normalizedPath;
+
+              // Fallback: case-insensitive search for legacy cached repos
+              // (repos cached before case-normalization fix may have different casing)
+              // spec.name guaranteed to be "owner/repo" format for github registry
+              const [owner, repo] = spec.name.split("/") as [string, string];
+
+              const cacheExists = yield* fs.exists(cacheDir);
+              if (!cacheExists) return normalizedPath;
+
+              const entries = yield* fs.readDirectory(cacheDir);
+              for (const entry of entries) {
+                if (entry.toLowerCase() === owner) {
+                  const ownerPath = pathService.join(cacheDir, entry);
+                  const ownerStat = yield* fs.stat(ownerPath);
+                  if (ownerStat.type !== "Directory") continue;
+
+                  const repoEntries = yield* fs.readDirectory(ownerPath);
+                  for (const repoEntry of repoEntries) {
+                    if (repoEntry.toLowerCase() === repo) {
+                      return pathService.join(ownerPath, repoEntry);
+                    }
+                  }
+                }
+              }
+
+              return normalizedPath;
+            }
             case "npm":
             case "pypi":
             case "crates":
               // Package registries include version in path
               return pathService.join(cacheDir, spec.name, version);
           }
-        });
+        }).pipe(Effect.orDie);
 
       const exists = (spec: PackageSpec) =>
         Effect.gen(function* () {
