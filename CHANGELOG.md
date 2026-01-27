@@ -1,5 +1,13 @@
 # @cvr/repo
 
+## 1.1.1
+
+### Patch Changes
+
+- [`c8d2d8f`](https://github.com/cevr/repo/commit/c8d2d8f7c42e9a53447263b1f8e23ba96468d72e) Thanks [@cevr](https://github.com/cevr)! - fix: case-insensitive cache lookup for legacy GitHub repos
+
+  Repos cached before case-normalization fix may have mixed-case paths (e.g., `Vercel/Next.js`). Now `fetch`, `path`, `info`, and `remove` commands correctly find these legacy entries when queried with lowercase specs.
+
 ## 1.1.0
 
 ### Minor Changes
