@@ -11,6 +11,7 @@ export class GitService extends Context.Tag("@cvr/repo/services/git/GitService")
       options?: { depth?: number; ref?: string },
     ) => Effect.Effect<void, GitError>;
     readonly update: (path: string) => Effect.Effect<void, GitError>;
+    readonly fetchRefs: (path: string) => Effect.Effect<void, GitError>;
     readonly isGitRepo: (path: string) => Effect.Effect<boolean>;
     readonly getDefaultBranch: (url: string) => Effect.Effect<string, GitError>;
     readonly getCurrentRef: (path: string) => Effect.Effect<string, GitError>;
@@ -82,6 +83,27 @@ export class GitService extends Context.Tag("@cvr/repo/services/git/GitService")
                 cause: new Error(`git clone failed with exit code ${exitCode}`),
               });
             }
+          }
+        }),
+
+      fetchRefs: (path) =>
+        Effect.gen(function* () {
+          const fetchProc = Bun.spawn(["git", "-C", path, "fetch", "--all", "--prune"], {
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+
+          const fetchExit = yield* Effect.tryPromise({
+            try: () => fetchProc.exited,
+            catch: (cause) => new GitError({ operation: "fetch", repo: path, cause }),
+          });
+
+          if (fetchExit !== 0) {
+            return yield* new GitError({
+              operation: "fetch",
+              repo: path,
+              cause: new Error(`git fetch failed with exit code ${fetchExit}`),
+            });
           }
         }),
 

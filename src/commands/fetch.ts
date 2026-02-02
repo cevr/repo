@@ -19,12 +19,6 @@ const forceOption = Options.boolean("force").pipe(
   Options.withDescription("Force re-clone (removes existing and clones fresh)"),
 );
 
-const updateOption = Options.boolean("update").pipe(
-  Options.withAlias("u"),
-  Options.withDefault(false),
-  Options.withDescription("Update existing repo (git pull)"),
-);
-
 const fullHistoryOption = Options.boolean("full").pipe(
   Options.withDefault(false),
   Options.withDescription("Clone full git history (default: shallow clone with depth 100)"),
@@ -32,8 +26,8 @@ const fullHistoryOption = Options.boolean("full").pipe(
 
 export const fetch = Command.make(
   "fetch",
-  { spec: specArg, force: forceOption, update: updateOption, full: fullHistoryOption },
-  ({ spec, force, update, full }) =>
+  { spec: specArg, force: forceOption, full: fullHistoryOption },
+  ({ spec, force, full }) =>
     Effect.gen(function* () {
       const registry = yield* RegistryService;
       const cache = yield* CacheService;
@@ -56,52 +50,40 @@ export const fetch = Command.make(
           yield* Console.log(`Force re-fetching ${specStr}...`);
           yield* cache.remove(existing.path);
           yield* metadata.remove(parsedSpec);
-        } else if (update) {
-          // Explicit update requested
-          if (isGit) {
-            yield* Console.log(`Updating ${specStr}...`);
-            yield* git
-              .update(existing.path)
-              .pipe(
-                Effect.catchAll((e) =>
-                  Console.log(`Update failed, repo may be up to date: ${e._tag}`),
-                ),
-              );
+        } else if (isGit) {
+          // Git repo: always pull latest
+          yield* Console.log(`Updating ${specStr}...`);
+          yield* git
+            .update(existing.path)
+            .pipe(
+              Effect.catchAll((e) =>
+                Console.log(`Update failed, repo may be up to date: ${e._tag}`),
+              ),
+            );
 
-            // Recalculate size after update
-            const sizeBytes = yield* cache.getSize(existing.path);
-            const currentRef = yield* git
-              .getCurrentRef(existing.path)
-              .pipe(Effect.orElseSucceed(() => "unknown"));
+          // Recalculate size after update
+          const sizeBytes = yield* cache.getSize(existing.path);
+          const currentRef = yield* git
+            .getCurrentRef(existing.path)
+            .pipe(Effect.orElseSucceed(() => "unknown"));
 
-            yield* metadata.add({
-              spec: parsedSpec,
-              fetchedAt: existing.fetchedAt,
-              lastAccessedAt: new Date().toISOString(),
-              sizeBytes,
-              path: existing.path,
-            });
+          yield* metadata.add({
+            spec: parsedSpec,
+            fetchedAt: existing.fetchedAt,
+            lastAccessedAt: new Date().toISOString(),
+            sizeBytes,
+            path: existing.path,
+          });
 
-            yield* Console.log(`Updated: ${existing.path}`);
-            yield* Console.log(`Current ref: ${currentRef}`);
-            yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
-            return;
-          } else {
-            // Not a git repo, can't update
-            yield* metadata.updateAccessTime(parsedSpec);
-            yield* Console.log(`Already cached at: ${existing.path}`);
-            yield* Console.log(`Size: ${formatBytes(existing.sizeBytes)}`);
-            yield* Console.log(`(Not a git repo - use --force to re-fetch)`);
-            return;
-          }
+          yield* Console.log(`Updated: ${existing.path}`);
+          yield* Console.log(`Current ref: ${currentRef}`);
+          yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
+          return;
         } else {
-          // Already cached, just update access time
+          // Not a git repo, can't update
           yield* metadata.updateAccessTime(parsedSpec);
           yield* Console.log(`Already cached at: ${existing.path}`);
           yield* Console.log(`Size: ${formatBytes(existing.sizeBytes)}`);
-          if (isGit) {
-            yield* Console.log(`Use --update to pull latest changes`);
-          }
           yield* Console.log(`Use --force to re-fetch from scratch`);
           return;
         }

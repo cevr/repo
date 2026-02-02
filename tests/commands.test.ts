@@ -48,8 +48,8 @@ describe("fetch command", () => {
           ["/tmp/test-repo-cache/vercel/next.js", { url: "https://github.com/vercel/next.js.git" }],
         ]);
 
-        // --update flag is required to trigger update behavior
-        const sequence = yield* runCli("fetch --update vercel/next.js", {
+        // No --update needed — fetch always updates cached git repos
+        const sequence = yield* runCli("fetch vercel/next.js", {
           git: { clonedRepos: gitState },
           metadata: {
             index: {
@@ -195,7 +195,7 @@ describe("clean command", () => {
 });
 
 describe("path command", () => {
-  it.effect("returns path for cached repo", () =>
+  it.effect("returns path and background-refreshes git repo", () =>
     Effect.gen(function* () {
       const spec = {
         registry: "github" as const,
@@ -204,6 +204,11 @@ describe("path command", () => {
       };
 
       const sequence = yield* runCli("path owner/repo", {
+        git: {
+          clonedRepos: new Map([
+            ["/tmp/test-repo-cache/owner/repo", { url: "https://github.com/owner/repo.git" }],
+          ]),
+        },
         metadata: {
           index: {
             version: 1,
@@ -222,6 +227,8 @@ describe("path command", () => {
 
       expect(sequence.some((c) => c.service === "registry" && c.method === "parseSpec")).toBe(true);
       expect(sequence.some((c) => c.service === "metadata" && c.method === "find")).toBe(true);
+      expect(sequence.some((c) => c.service === "git" && c.method === "isGitRepo")).toBe(true);
+      expect(sequence.some((c) => c.service === "git" && c.method === "fetchRefs")).toBe(true);
     }),
   );
 });

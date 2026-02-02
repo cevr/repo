@@ -70,6 +70,8 @@ export function createMockGitService(options: CreateMockGitServiceOptions = {}):
           }));
         }),
 
+      fetchRefs: (path) => record("fetchRefs", { path }),
+
       isGitRepo: (path) =>
         Effect.gen(function* () {
           const s = yield* Ref.get(stateRef);
