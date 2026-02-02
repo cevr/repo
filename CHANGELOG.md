@@ -1,5 +1,14 @@
 # @cvr/repo
 
+## 1.2.0
+
+### Minor Changes
+
+- [`471abc5`](https://github.com/cevr/repo/commit/471abc5760c84068bec28217d84375e68140f012) Thanks [@cevr](https://github.com/cevr)! - Always refresh git repos on fetch, background refresh on path
+  - `fetch`: cached git repos are now always updated (removed `--update` flag). Non-git repos still return cached path.
+  - `path`: returns cached path immediately, then refreshes git refs via a forked `fetchRefs` in the background.
+  - Added `fetchRefs` method to `GitService` for fetch-only (no reset) git refresh.
+
 ## 1.1.1
 
 ### Patch Changes
