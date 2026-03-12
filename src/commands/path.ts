@@ -1,21 +1,21 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect } from "effect";
 import { NotFoundError, specToString } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
 
-const specArg = Args.text({ name: "spec" }).pipe(
-  Args.withDescription("Package spec to get path for"),
+const specArg = Argument.string("spec").pipe(
+  Argument.withDescription("Package spec to get path for"),
 );
 
-const quietOption = Options.boolean("quiet").pipe(
-  Options.withAlias("q"),
-  Options.withDefault(false),
-  Options.withDescription("Output only the path, exit 1 if not cached"),
+const quietFlag = Flag.boolean("quiet").pipe(
+  Flag.withAlias("q"),
+  Flag.withDefault(false),
+  Flag.withDescription("Output only the path, exit 1 if not cached"),
 );
 
-export const path = Command.make("path", { spec: specArg, quiet: quietOption }, ({ spec, quiet }) =>
+export const path = Command.make("path", { spec: specArg, quiet: quietFlag }, ({ spec, quiet }) =>
   Effect.gen(function* () {
     const registry = yield* RegistryService;
     const metadata = yield* MetadataService;
@@ -35,13 +35,10 @@ export const path = Command.make("path", { spec: specArg, quiet: quietOption }, 
     yield* Console.log(existing.path);
     yield* metadata.updateAccessTime(parsedSpec);
 
-    // Background refresh for git repos — fire-and-forget so we don't block the caller
+    // Refresh refs for git repos (best-effort)
     const isGit = yield* git.isGitRepo(existing.path);
     if (isGit) {
-      yield* git.fetchRefs(existing.path).pipe(
-        Effect.catchAll(() => Effect.void),
-        Effect.fork,
-      );
+      yield* git.fetchRefs(existing.path).pipe(Effect.catch(() => Effect.void));
     }
-  }).pipe(Effect.catchAll(() => Effect.void)),
+  }).pipe(Effect.catch(() => Effect.void)),
 );

@@ -1,29 +1,13 @@
 // @effect-diagnostics strictEffectProvide:off
-import { Command } from "@effect/cli";
-import { BunContext } from "@effect/platform-bun";
-import { Effect, Either, Layer, Ref } from "effect";
-import { expect } from "vitest";
+import { Command } from "effect/unstable/cli";
+import { BunServices } from "@effect/platform-bun";
+import { Effect, Layer, Ref, Result } from "effect";
+import { expect } from "bun:test";
 
-import { fetch } from "../commands/fetch.js";
-import { list } from "../commands/list.js";
-import { search } from "../commands/search.js";
-import { remove } from "../commands/remove.js";
-import { clean } from "../commands/clean.js";
-import { prune } from "../commands/prune.js";
-import { stats } from "../commands/stats.js";
-import { open } from "../commands/open.js";
-import { path } from "../commands/path.js";
-import { info } from "../commands/info.js";
+import { rootCommand } from "../commands/root.js";
 
 import { createTestLayer, type CreateTestLayerOptions } from "./index.js";
 import type { ExpectedCall, RecordedCall } from "./sequence.js";
-
-// ─── Root Command ──────────────────────────────────────────────────────────────
-
-const rootCommand = Command.make("repo").pipe(
-  Command.withDescription("Multi-registry source code cache manager"),
-  Command.withSubcommands([fetch, list, search, remove, clean, prune, stats, open, path, info]),
-);
 
 // ─── Re-export types ───────────────────────────────────────────────────────────
 
@@ -63,94 +47,66 @@ function assertSequenceContains(actual: RecordedCall[], expected: ExpectedCall[]
   }
 }
 
+// ─── CLI Runner Helpers ───────────────────────────────────────────────────────
+
+function runWithLayer(args: string[], layerOptions: CreateTestLayerOptions) {
+  const { layer, sequenceRef } = createTestLayer(layerOptions);
+  const cli = Command.runWith(rootCommand, { version: "0.0.0-test" });
+  const fullLayer = layer.pipe(Layer.provideMerge(BunServices.layer));
+  const run = cli(args).pipe(Effect.provide(fullLayer), Effect.result);
+  return { run, sequenceRef };
+}
+
 // ─── CLI Test Runner ──────────────────────────────────────────────────────────
 
-export class CliTestRunner {
-  constructor(
-    private args: string[],
-    private options: CreateTestLayerOptions,
-  ) {}
+export interface CliTestRunner {
+  expectSequence(expected: ExpectedCall[]): Effect.Effect<void>;
+  expectError(errorTag: string): Effect.Effect<void>;
+  expectSuccess(): Effect.Effect<void>;
+  getSequence(): Effect.Effect<RecordedCall[]>;
+}
 
-  expectSequence(expected: ExpectedCall[]): Effect.Effect<void> {
-    return Effect.gen(this, function* () {
-      const { layer, sequenceRef } = createTestLayer(this.options);
+function createCliTestRunner(args: string[], layerOptions: CreateTestLayerOptions): CliTestRunner {
+  return {
+    expectSequence: (expected) =>
+      Effect.gen(function* () {
+        const { run, sequenceRef } = runWithLayer(args, layerOptions);
+        yield* run;
+        const actual = yield* Ref.get(sequenceRef);
+        assertSequenceContains(actual, expected);
+      }),
 
-      const cli = Command.run(rootCommand, { name: "repo", version: "0.0.0-test" });
-      const argv = ["bun", "repo", ...this.args];
-      const fullLayer = layer.pipe(Layer.provideMerge(BunContext.layer));
-      yield* cli(argv).pipe(Effect.provide(fullLayer), Effect.either);
+    expectError: (errorTag) =>
+      Effect.gen(function* () {
+        const { run } = runWithLayer(args, layerOptions);
+        const result = yield* run;
+        expect(Result.isFailure(result)).toBe(true);
+        if (Result.isFailure(result)) {
+          const error = result.failure as { _tag?: string };
+          expect(error._tag).toBe(errorTag);
+        }
+      }),
 
-      const actual = yield* Ref.get(sequenceRef);
-      assertSequenceContains(actual, expected);
-    });
-  }
+    expectSuccess: () =>
+      Effect.gen(function* () {
+        const { run } = runWithLayer(args, layerOptions);
+        yield* run;
+      }),
 
-  expectError(errorTag: string): Effect.Effect<void> {
-    return Effect.gen(this, function* () {
-      const { layer } = createTestLayer(this.options);
-
-      const cli = Command.run(rootCommand, { name: "repo", version: "0.0.0-test" });
-      const fullLayer = layer.pipe(Layer.provideMerge(BunContext.layer));
-      const result = yield* cli(["bun", "repo", ...this.args]).pipe(
-        Effect.provide(fullLayer),
-        Effect.either,
-      );
-
-      expect(Either.isLeft(result)).toBe(true);
-      if (Either.isLeft(result)) {
-        const error = result.left as { _tag?: string };
-        expect(error._tag).toBe(errorTag);
-      }
-    });
-  }
-
-  expectSuccess(): Effect.Effect<void> {
-    return this.expectSequence([]);
-  }
-
-  getSequence(): Effect.Effect<RecordedCall[]> {
-    return Effect.gen(this, function* () {
-      const { layer, sequenceRef } = createTestLayer(this.options);
-
-      const cli = Command.run(rootCommand, { name: "repo", version: "0.0.0-test" });
-      const fullLayer = layer.pipe(Layer.provideMerge(BunContext.layer));
-      yield* cli(["bun", "repo", ...this.args]).pipe(Effect.provide(fullLayer), Effect.either);
-
-      return yield* Ref.get(sequenceRef);
-    });
-  }
+    getSequence: () =>
+      Effect.gen(function* () {
+        const { run, sequenceRef } = runWithLayer(args, layerOptions);
+        yield* run;
+        return yield* Ref.get(sequenceRef);
+      }),
+  };
 }
 
 // ─── Main API ─────────────────────────────────────────────────────────────────
 
 /**
  * Creates a CLI test runner with the given arguments and options.
- *
- * IMPORTANT: Due to @effect/cli parser behavior, options with space-separated values
- * must come BEFORE positional arguments. Alternatively, use equals syntax (--option=value).
- *
- * @example
- * ```ts
- * // CORRECT: options before positional arg
- * runCli('fetch -f vercel/next.js', {...})
- *
- * // CORRECT: equals syntax
- * runCli('fetch vercel/next.js --force', {...})
- *
- * // Full example:
- * it.effect('fetches a GitHub repo', () =>
- *   runCli('fetch vercel/next.js', {
- *     cache: { cacheDir: '/tmp/test' },
- *   }).expectSequence([
- *     { service: 'registry', method: 'parseSpec' },
- *     { service: 'cache', method: 'getPath' },
- *     { service: 'cache', method: 'exists' },
- *     { service: 'git', method: 'clone' },
- *     { service: 'metadata', method: 'add' },
- *   ])
- * );
- * ```
  */
 export function runCli(args: string, options: CreateTestLayerOptions = {}): CliTestRunner {
-  return new CliTestRunner(args.split(/\s+/), options);
+  return createCliTestRunner(args.split(/\s+/), options);
 }

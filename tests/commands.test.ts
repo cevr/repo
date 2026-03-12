@@ -1,10 +1,7 @@
 // @effect-diagnostics strictEffectProvide:off
 import { Effect, Option } from "effect";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "effect-bun-test";
 import { runCli } from "../src/test-utils/index.js";
-
-// NOTE: Due to @effect/cli arg ordering quirk, options must come BEFORE positional args.
-// See bite CLI tests for details on this parser behavior.
 
 describe("fetch command", () => {
   describe("fresh fetch", () => {

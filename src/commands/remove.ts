@@ -1,4 +1,4 @@
-import { Args, Command } from "@effect/cli";
+import { Argument, Command } from "effect/unstable/cli";
 import { Console, Effect } from "effect";
 import { specToString, formatBytes } from "../types.js";
 import { CacheService } from "../services/cache.js";
@@ -6,7 +6,7 @@ import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { handleCommandError } from "./shared.js";
 
-const specArg = Args.text({ name: "spec" }).pipe(Args.withDescription("Package spec to remove"));
+const specArg = Argument.string("spec").pipe(Argument.withDescription("Package spec to remove"));
 
 export const remove = Command.make("remove", { spec: specArg }, ({ spec }) =>
   Effect.gen(function* () {
@@ -32,5 +32,5 @@ export const remove = Command.make("remove", { spec: specArg }, ({ spec }) =>
 
     yield* Console.log(`Removed: ${specToString(parsedSpec)}`);
     yield* Console.log(`Freed: ${formatBytes(existing.sizeBytes)}`);
-  }).pipe(Effect.catchAll(handleCommandError)),
+  }).pipe(Effect.catch(handleCommandError)),
 );

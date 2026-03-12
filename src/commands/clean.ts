@@ -1,16 +1,16 @@
-import { Command, Options } from "@effect/cli";
+import { Command, Flag } from "effect/unstable/cli";
 import { Console, Effect } from "effect";
 import { formatBytes } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
 
-const confirmOption = Options.boolean("yes").pipe(
-  Options.withAlias("y"),
-  Options.withDefault(false),
-  Options.withDescription("Skip confirmation prompt"),
+const confirmFlag = Flag.boolean("yes").pipe(
+  Flag.withAlias("y"),
+  Flag.withDefault(false),
+  Flag.withDescription("Skip confirmation prompt"),
 );
 
-export const clean = Command.make("clean", { yes: confirmOption }, ({ yes }) =>
+export const clean = Command.make("clean", { yes: confirmFlag }, ({ yes }) =>
   Effect.gen(function* () {
     const cache = yield* CacheService;
     const metadata = yield* MetadataService;

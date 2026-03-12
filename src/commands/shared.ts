@@ -1,7 +1,9 @@
 import { Console, Effect, Schema } from "effect";
 
+const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
+
 /**
- * Type guard for tagged errors (Effect Data.TaggedError instances)
+ * Type guard for tagged errors (Effect Schema.TaggedErrorClass instances)
  */
 export const isTaggedError = (e: unknown): e is { _tag: string; message?: string } =>
   typeof e === "object" &&
@@ -16,7 +18,7 @@ export const isTaggedError = (e: unknown): e is { _tag: string; message?: string
 export const handleCommandError = (error: unknown) =>
   Effect.gen(function* () {
     if (isTaggedError(error)) {
-      const jsonStr = yield* Schema.encode(Schema.parseJson())(error).pipe(
+      const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(error).pipe(
         Effect.orElseSucceed(() => String(error)),
       );
       yield* Console.error(`Error [${error._tag}]: ${jsonStr}`);

@@ -1,4 +1,4 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Option, Schema } from "effect";
 import { specToString, formatBytes, formatRelativeTime } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
@@ -6,16 +6,18 @@ import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
 import { handleCommandError } from "./shared.js";
 
-const specArg = Args.text({ name: "spec" }).pipe(
-  Args.withDescription("Package spec to get info for"),
+const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
+
+const specArg = Argument.string("spec").pipe(
+  Argument.withDescription("Package spec to get info for"),
 );
 
-const jsonOption = Options.boolean("json").pipe(
-  Options.withDefault(false),
-  Options.withDescription("Output as JSON"),
+const jsonFlag = Flag.boolean("json").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Output as JSON"),
 );
 
-export const info = Command.make("info", { spec: specArg, json: jsonOption }, ({ spec, json }) =>
+export const info = Command.make("info", { spec: specArg, json: jsonFlag }, ({ spec, json }) =>
   Effect.gen(function* () {
     const registry = yield* RegistryService;
     const metadata = yield* MetadataService;
@@ -49,7 +51,7 @@ export const info = Command.make("info", { spec: specArg, json: jsonOption }, ({
         isGitRepo: isGit,
         currentRef,
       };
-      const jsonStr = yield* Schema.encode(Schema.parseJson(Schema.Unknown))(output);
+      const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
       yield* Console.log(jsonStr);
     } else {
       yield* Console.log(``);
@@ -67,5 +69,5 @@ export const info = Command.make("info", { spec: specArg, json: jsonOption }, ({
     }
 
     yield* metadata.updateAccessTime(parsedSpec);
-  }).pipe(Effect.catchAll(handleCommandError)),
+  }).pipe(Effect.catch(handleCommandError)),
 );

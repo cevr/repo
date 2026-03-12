@@ -36,7 +36,7 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
       repos: [...(initialState.index?.repos ?? [])],
     },
   };
-  const stateRef = Ref.unsafeMake(state);
+  const stateRef = Ref.makeUnsafe(state);
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
     sequenceRef !== undefined
@@ -50,129 +50,126 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
     return aVersion === bVersion;
   };
 
-  const layer = Layer.succeed(
-    MetadataService,
-    MetadataService.of({
-      load: () =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          yield* record("load", {}, s.index);
-          return s.index;
-        }),
+  const layer = Layer.succeed(MetadataService, {
+    load: () =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        yield* record("load", {}, s.index);
+        return s.index;
+      }),
 
-      save: (newIndex) =>
-        Effect.gen(function* () {
-          yield* record("save", { index: newIndex });
-          yield* Ref.update(stateRef, (s) => ({ ...s, index: newIndex }));
-        }),
+    save: (newIndex) =>
+      Effect.gen(function* () {
+        yield* record("save", { index: newIndex });
+        yield* Ref.update(stateRef, (s) => ({ ...s, index: newIndex }));
+      }),
 
-      add: (metadata) =>
-        Effect.gen(function* () {
-          yield* record("add", { metadata });
-          yield* Ref.update(stateRef, (s) => {
-            const filtered = s.index.repos.filter((r) => !specMatches(r.spec, metadata.spec));
-            return {
-              ...s,
-              index: { ...s.index, repos: [...filtered, metadata] },
-            };
-          });
-        }),
-
-      addMany: (metadataList) =>
-        Effect.gen(function* () {
-          yield* record("addMany", { metadataList });
-          yield* Ref.update(stateRef, (s) => {
-            let repos = [...s.index.repos];
-            for (const metadata of metadataList) {
-              repos = repos.filter((r) => !specMatches(r.spec, metadata.spec));
-              repos.push(metadata);
-            }
-            return { ...s, index: { ...s.index, repos } };
-          });
-        }),
-
-      remove: (spec) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          const originalLength = s.index.repos.length;
-          const filtered = s.index.repos.filter((r) => !specMatches(r.spec, spec));
-          const result = filtered.length < originalLength;
-          yield* record("remove", { spec }, result);
-          yield* Ref.set(stateRef, {
+    add: (metadata) =>
+      Effect.gen(function* () {
+        yield* record("add", { metadata });
+        yield* Ref.update(stateRef, (s) => {
+          const filtered = s.index.repos.filter((r) => !specMatches(r.spec, metadata.spec));
+          return {
             ...s,
-            index: { ...s.index, repos: filtered },
-          });
-          return result;
-        }),
+            index: { ...s.index, repos: [...filtered, metadata] },
+          };
+        });
+      }),
 
-      removeMany: (specs) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          const originalLength = s.index.repos.length;
-          const filtered = s.index.repos.filter(
-            (r) => !specs.some((spec) => specMatches(r.spec, spec)),
-          );
-          const removedCount = originalLength - filtered.length;
-          yield* record("removeMany", { specs }, removedCount);
-          yield* Ref.set(stateRef, {
-            ...s,
-            index: { ...s.index, repos: filtered },
-          });
-          return removedCount;
-        }),
+    addMany: (metadataList) =>
+      Effect.gen(function* () {
+        yield* record("addMany", { metadataList });
+        yield* Ref.update(stateRef, (s) => {
+          let repos = [...s.index.repos];
+          for (const metadata of metadataList) {
+            repos = repos.filter((r) => !specMatches(r.spec, metadata.spec));
+            repos.push(metadata);
+          }
+          return { ...s, index: { ...s.index, repos } };
+        });
+      }),
 
-      find: (spec) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          const result = s.index.repos.find((r) => specMatches(r.spec, spec)) ?? null;
-          yield* record("find", { spec }, result);
-          return result;
-        }),
+    remove: (spec) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        const originalLength = s.index.repos.length;
+        const filtered = s.index.repos.filter((r) => !specMatches(r.spec, spec));
+        const result = filtered.length < originalLength;
+        yield* record("remove", { spec }, result);
+        yield* Ref.set(stateRef, {
+          ...s,
+          index: { ...s.index, repos: filtered },
+        });
+        return result;
+      }),
 
-      updateAccessTime: (spec) =>
-        Effect.gen(function* () {
-          yield* record("updateAccessTime", { spec });
-          yield* Ref.update(stateRef, (s) => ({
-            ...s,
-            index: {
-              ...s.index,
-              repos: s.index.repos.map((r) => {
-                if (specMatches(r.spec, spec)) {
-                  return { ...r, lastAccessedAt: new Date().toISOString() };
-                }
-                return r;
-              }),
-            },
-          }));
-        }),
+    removeMany: (specs) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        const originalLength = s.index.repos.length;
+        const filtered = s.index.repos.filter(
+          (r) => !specs.some((spec) => specMatches(r.spec, spec)),
+        );
+        const removedCount = originalLength - filtered.length;
+        yield* record("removeMany", { specs }, removedCount);
+        yield* Ref.set(stateRef, {
+          ...s,
+          index: { ...s.index, repos: filtered },
+        });
+        return removedCount;
+      }),
 
-      findOlderThan: (days) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-          const result = s.index.repos.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
-          yield* record("findOlderThan", { days }, result);
-          return result;
-        }),
+    find: (spec) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        const result = s.index.repos.find((r) => specMatches(r.spec, spec)) ?? null;
+        yield* record("find", { spec }, result);
+        return result;
+      }),
 
-      findLargerThan: (bytes) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          const result = s.index.repos.filter((r) => r.sizeBytes > bytes);
-          yield* record("findLargerThan", { bytes }, result);
-          return result;
-        }),
+    updateAccessTime: (spec) =>
+      Effect.gen(function* () {
+        yield* record("updateAccessTime", { spec });
+        yield* Ref.update(stateRef, (s) => ({
+          ...s,
+          index: {
+            ...s.index,
+            repos: s.index.repos.map((r) => {
+              if (specMatches(r.spec, spec)) {
+                return { ...r, lastAccessedAt: new Date().toISOString() };
+              }
+              return r;
+            }),
+          },
+        }));
+      }),
 
-      all: () =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          yield* record("all", {}, s.index.repos);
-          return s.index.repos;
-        }),
+    findOlderThan: (days) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+        const result = s.index.repos.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
+        yield* record("findOlderThan", { days }, result);
+        return result;
+      }),
 
-      flush: () => record("flush", {}),
-    }),
-  );
+    findLargerThan: (bytes) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        const result = s.index.repos.filter((r) => r.sizeBytes > bytes);
+        yield* record("findLargerThan", { bytes }, result);
+        return result;
+      }),
+
+    all: () =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        yield* record("all", {}, s.index.repos);
+        return s.index.repos;
+      }),
+
+    flush: () => record("flush", {}),
+  });
 
   return {
     layer,

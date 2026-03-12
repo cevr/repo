@@ -37,7 +37,7 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
     ...initialState,
     store: new Map(initialState.store ?? []),
   };
-  const stateRef = Ref.unsafeMake(state);
+  const stateRef = Ref.makeUnsafe(state);
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
     sequenceRef !== undefined
@@ -63,58 +63,55 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
       return result;
     });
 
-  const layer = Layer.succeed(
-    CacheService,
-    CacheService.of({
-      cacheDir: state.cacheDir,
+  const layer = Layer.succeed(CacheService, {
+    cacheDir: state.cacheDir,
 
-      getPath,
+    getPath,
 
-      exists: (spec) =>
-        Effect.gen(function* () {
-          const path = yield* getPath(spec);
-          const s = yield* Ref.get(stateRef);
-          const result = s.store.has(path);
-          yield* record("exists", { spec }, result);
-          return result;
-        }),
+    exists: (spec) =>
+      Effect.gen(function* () {
+        const path = yield* getPath(spec);
+        const s = yield* Ref.get(stateRef);
+        const result = s.store.has(path);
+        yield* record("exists", { spec }, result);
+        return result;
+      }),
 
-      remove: (path) =>
-        Effect.gen(function* () {
-          yield* record("remove", { path });
-          yield* Ref.update(stateRef, (s) => {
-            const newStore = new Map(s.store);
-            for (const key of newStore.keys()) {
-              if (key.startsWith(path)) {
-                newStore.delete(key);
-              }
-            }
-            return { ...s, store: newStore };
-          });
-        }),
-
-      removeAll: () =>
-        Effect.gen(function* () {
-          yield* record("removeAll", {});
-          yield* Ref.update(stateRef, (s) => ({ ...s, store: new Map() }));
-        }),
-
-      getSize: (path) =>
-        Effect.gen(function* () {
-          const s = yield* Ref.get(stateRef);
-          let total = 0;
-          for (const [key, value] of s.store.entries()) {
+    remove: (path) =>
+      Effect.gen(function* () {
+        yield* record("remove", { path });
+        yield* Ref.update(stateRef, (s) => {
+          const newStore = new Map(s.store);
+          for (const key of newStore.keys()) {
             if (key.startsWith(path)) {
-              total += value.size;
+              newStore.delete(key);
             }
           }
-          yield* record("getSize", { path }, total);
-          return total;
-        }),
+          return { ...s, store: newStore };
+        });
+      }),
 
-      ensureDir: (path) => record("ensureDir", { path }),
-    }),
-  );
+    removeAll: () =>
+      Effect.gen(function* () {
+        yield* record("removeAll", {});
+        yield* Ref.update(stateRef, (s) => ({ ...s, store: new Map() }));
+      }),
+
+    getSize: (path) =>
+      Effect.gen(function* () {
+        const s = yield* Ref.get(stateRef);
+        let total = 0;
+        for (const [key, value] of s.store.entries()) {
+          if (key.startsWith(path)) {
+            total += value.size;
+          }
+        }
+        yield* record("getSize", { path }, total);
+        return total;
+      }),
+
+    ensureDir: (path) => record("ensureDir", { path }),
+  });
 
   const addFile = (path: string, size: number) =>
     Ref.update(stateRef, (s) => {

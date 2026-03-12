@@ -1,28 +1,26 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Option } from "effect";
 import { OpenError, specToString } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { handleCommandError } from "./shared.js";
 
-const specArg = Args.text({ name: "spec" }).pipe(Args.withDescription("Package spec to open"));
+const specArg = Argument.string("spec").pipe(Argument.withDescription("Package spec to open"));
 
 // Target: "finder" | "editor" | custom editor command
 // --with finder  -> open in Finder
 // --with code    -> open in VS Code
 // --with vim     -> open in vim
 // (no option)    -> use $EDITOR or "code"
-const withOption = Options.text("with").pipe(
-  Options.withAlias("w"),
-  Options.optional,
-  Options.withDescription(
-    'Target: "finder" for Finder, or editor command (default: $EDITOR or code)',
-  ),
+const withFlag = Flag.string("with").pipe(
+  Flag.withAlias("w"),
+  Flag.optional,
+  Flag.withDescription('Target: "finder" for Finder, or editor command (default: $EDITOR or code)'),
 );
 
 export const open = Command.make(
   "open",
-  { spec: specArg, with: withOption },
+  { spec: specArg, with: withFlag },
   ({ spec, with: target }) =>
     Effect.gen(function* () {
       const registry = yield* RegistryService;
@@ -74,5 +72,5 @@ export const open = Command.make(
         });
         yield* Console.log(`Opened in ${targetValue}: ${existing.path}`);
       }
-    }).pipe(Effect.catchAll(handleCommandError)),
+    }).pipe(Effect.catch(handleCommandError)),
 );

@@ -1,34 +1,31 @@
-import { Command, Options } from "@effect/cli";
+import { Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Option, Schema } from "effect";
 import { formatBytes, formatRelativeTime, specToString } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { handleCommandError } from "./shared.js";
 
-const registryOption = Options.choice("registry", [
-  "github",
-  "npm",
-  "pypi",
-  "crates",
-] as const).pipe(
-  Options.withAlias("r"),
-  Options.optional,
-  Options.withDescription("Filter by registry"),
+const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
+
+const registryFlag = Flag.choice("registry", ["github", "npm", "pypi", "crates"] as const).pipe(
+  Flag.withAlias("r"),
+  Flag.optional,
+  Flag.withDescription("Filter by registry"),
 );
 
-const jsonOption = Options.boolean("json").pipe(
-  Options.withDefault(false),
-  Options.withDescription("Output as JSON"),
+const jsonFlag = Flag.boolean("json").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Output as JSON"),
 );
 
-const sortOption = Options.choice("sort", ["date", "size", "name"] as const).pipe(
-  Options.withAlias("s"),
-  Options.withDefault("date" as const),
-  Options.withDescription("Sort by: date, size, name"),
+const sortFlag = Flag.choice("sort", ["date", "size", "name"] as const).pipe(
+  Flag.withAlias("s"),
+  Flag.withDefault("date" as const),
+  Flag.withDescription("Sort by: date, size, name"),
 );
 
 export const list = Command.make(
   "list",
-  { registry: registryOption, json: jsonOption, sort: sortOption },
+  { registry: registryFlag, json: jsonFlag, sort: sortFlag },
   ({ registry, json, sort }) =>
     Effect.gen(function* () {
       const metadata = yield* MetadataService;
@@ -64,7 +61,7 @@ export const list = Command.make(
           total: sorted.length,
           totalSize: sorted.reduce((sum, r) => sum + r.sizeBytes, 0),
         };
-        const jsonStr = yield* Schema.encode(Schema.parseJson(Schema.Unknown))(output);
+        const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
         yield* Console.log(jsonStr);
         return;
       }
@@ -91,5 +88,5 @@ export const list = Command.make(
       yield* Console.log("═".repeat(80));
       const totalSize = sorted.reduce((sum, r) => sum + r.sizeBytes, 0);
       yield* Console.log(`Total: ${formatBytes(totalSize)}`);
-    }).pipe(Effect.catchAll(handleCommandError)),
+    }).pipe(Effect.catch(handleCommandError)),
 );

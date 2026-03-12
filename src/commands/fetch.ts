@@ -1,4 +1,4 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect } from "effect";
 import { formatBytes, specToString } from "../types.js";
 import { CacheService } from "../services/cache.js";
@@ -7,26 +7,26 @@ import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
 import { handleCommandError } from "./shared.js";
 
-const specArg = Args.text({ name: "spec" }).pipe(
-  Args.withDescription(
+const specArg = Argument.string("spec").pipe(
+  Argument.withDescription(
     "Package spec: owner/repo, npm:package[@version], pypi:package, crates:crate",
   ),
 );
 
-const forceOption = Options.boolean("force").pipe(
-  Options.withAlias("f"),
-  Options.withDefault(false),
-  Options.withDescription("Force re-clone (removes existing and clones fresh)"),
+const forceFlag = Flag.boolean("force").pipe(
+  Flag.withAlias("f"),
+  Flag.withDefault(false),
+  Flag.withDescription("Force re-clone (removes existing and clones fresh)"),
 );
 
-const fullHistoryOption = Options.boolean("full").pipe(
-  Options.withDefault(false),
-  Options.withDescription("Clone full git history (default: shallow clone with depth 100)"),
+const fullHistoryFlag = Flag.boolean("full").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Clone full git history (default: shallow clone with depth 100)"),
 );
 
 export const fetch = Command.make(
   "fetch",
-  { spec: specArg, force: forceOption, full: fullHistoryOption },
+  { spec: specArg, force: forceFlag, full: fullHistoryFlag },
   ({ spec, force, full }) =>
     Effect.gen(function* () {
       const registry = yield* RegistryService;
@@ -56,9 +56,7 @@ export const fetch = Command.make(
           yield* git
             .update(existing.path)
             .pipe(
-              Effect.catchAll((e) =>
-                Console.log(`Update failed, repo may be up to date: ${e._tag}`),
-              ),
+              Effect.catch((e) => Console.log(`Update failed, repo may be up to date: ${e._tag}`)),
             );
 
           // Recalculate size after update
@@ -123,5 +121,5 @@ export const fetch = Command.make(
 
       yield* Console.log(`Fetched to: ${destPath}`);
       yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
-    }).pipe(Effect.catchAll(handleCommandError)),
+    }).pipe(Effect.catch(handleCommandError)),
 );

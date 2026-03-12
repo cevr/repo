@@ -1,5 +1,4 @@
-import { FileSystem, Path } from "@effect/platform";
-import { Context, Effect, Layer, Option, Ref, Schema } from "effect";
+import { Effect, FileSystem, Layer, Option, Path, Ref, Schema, ServiceMap } from "effect";
 import type { PackageSpec, RepoMetadata } from "../types.js";
 import { MetadataIndex } from "../types.js";
 
@@ -9,8 +8,10 @@ interface CacheState {
   dirty: boolean;
 }
 
+const MetadataIndexJson = Schema.fromJsonString(MetadataIndex);
+
 // Service interface
-export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/MetadataService")<
+export class MetadataService extends ServiceMap.Service<
   MetadataService,
   {
     readonly load: () => Effect.Effect<MetadataIndex>;
@@ -26,7 +27,7 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
     readonly all: () => Effect.Effect<readonly RepoMetadata[]>;
     readonly flush: () => Effect.Effect<void>;
   }
->() {
+>()("@cvr/repo/services/metadata/MetadataService") {
   // Live layer using real filesystem with in-memory caching
   static readonly layer = Layer.effect(
     MetadataService,
@@ -59,10 +60,8 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
             return { version: 1, repos: [] };
           }
           const content = yield* fs.readFileString(metadataPath);
-          return yield* Schema.decodeUnknown(Schema.compose(Schema.parseJson(), MetadataIndex))(
-            content,
-          );
-        }).pipe(Effect.orElse(() => Effect.succeed({ version: 1, repos: [] })));
+          return yield* Schema.decodeUnknownEffect(MetadataIndexJson)(content);
+        }).pipe(Effect.catch(() => Effect.succeed({ version: 1, repos: [] })));
 
       // Load with caching
       const load = (): Effect.Effect<MetadataIndex> =>
@@ -82,18 +81,16 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
           yield* fs
             .makeDirectory(cacheDir, { recursive: true })
             .pipe(
-              Effect.catchTag("SystemError", (e) =>
-                e.reason === "AlreadyExists" ? Effect.void : Effect.fail(e),
+              Effect.catchTag("PlatformError", (e) =>
+                e.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(e),
               ),
             );
-          const jsonStr = yield* Schema.encode(Schema.compose(Schema.parseJson(), MetadataIndex))(
-            index,
-          );
+          const jsonStr = yield* Schema.encodeEffect(MetadataIndexJson)(index);
           // Atomic write: temp file then rename
           const tempPath = `${metadataPath}.tmp.${Date.now()}`;
           yield* fs.writeFileString(tempPath, jsonStr);
           yield* fs.rename(tempPath, metadataPath);
-        }).pipe(Effect.orElse(() => Effect.void));
+        }).pipe(Effect.catch(() => Effect.void));
 
       // Save updates cache and persists
       const save = (index: MetadataIndex): Effect.Effect<void> =>
@@ -202,7 +199,7 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
           return index.repos;
         });
 
-      return MetadataService.of({
+      return {
         load,
         save,
         add,
@@ -215,7 +212,7 @@ export class MetadataService extends Context.Tag("@cvr/repo/services/metadata/Me
         findLargerThan,
         all,
         flush,
-      });
+      };
     }),
   );
 }

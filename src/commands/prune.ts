@@ -1,23 +1,23 @@
-import { Command, Options } from "@effect/cli";
+import { Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Option } from "effect";
 import { formatBytes, specToString } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
 
-const daysOption = Options.integer("days").pipe(
-  Options.withAlias("d"),
-  Options.optional,
-  Options.withDescription("Remove repos not accessed in N days"),
+const daysFlag = Flag.integer("days").pipe(
+  Flag.withAlias("d"),
+  Flag.optional,
+  Flag.withDescription("Remove repos not accessed in N days"),
 );
 
-const maxSizeOption = Options.text("max-size").pipe(
-  Options.optional,
-  Options.withDescription("Remove repos larger than size (e.g., 100M, 1G)"),
+const maxSizeFlag = Flag.string("max-size").pipe(
+  Flag.optional,
+  Flag.withDescription("Remove repos larger than size (e.g., 100M, 1G)"),
 );
 
-const dryRunOption = Options.boolean("dry-run").pipe(
-  Options.withDefault(false),
-  Options.withDescription("Show what would be removed without actually removing"),
+const dryRunFlag = Flag.boolean("dry-run").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Show what would be removed without actually removing"),
 );
 
 function parseSize(sizeStr: string): number | null {
@@ -47,7 +47,7 @@ function parseSize(sizeStr: string): number | null {
 
 export const prune = Command.make(
   "prune",
-  { days: daysOption, maxSize: maxSizeOption, dryRun: dryRunOption },
+  { days: daysFlag, maxSize: maxSizeFlag, dryRun: dryRunFlag },
   ({ days, maxSize, dryRun }) =>
     Effect.gen(function* () {
       const cache = yield* CacheService;

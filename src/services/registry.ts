@@ -1,5 +1,5 @@
 // @effect-diagnostics strictEffectProvide:off
-import { Context, Effect, Layer, Option } from "effect";
+import { Effect, Layer, Option, Result, ServiceMap } from "effect";
 import type { PackageSpec, Registry, SpecParseError } from "../types.js";
 import { RegistryError, NetworkError } from "../types.js";
 import { parseSpec } from "../parsing.js";
@@ -12,7 +12,7 @@ export interface FetchOptions {
 }
 
 // Service interface
-export class RegistryService extends Context.Tag("@cvr/repo/services/registry/RegistryService")<
+export class RegistryService extends ServiceMap.Service<
   RegistryService,
   {
     readonly parseSpec: (input: string) => Effect.Effect<PackageSpec, SpecParseError>;
@@ -22,7 +22,7 @@ export class RegistryService extends Context.Tag("@cvr/repo/services/registry/Re
       options?: FetchOptions,
     ) => Effect.Effect<void, RegistryError | NetworkError>;
   }
->() {
+>()("@cvr/repo/services/registry/RegistryService") {
   // Live layer
   static readonly layer = Layer.effect(
     RegistryService,
@@ -31,9 +31,6 @@ export class RegistryService extends Context.Tag("@cvr/repo/services/registry/Re
       const git = yield* GitService;
 
       const parseSpecFn = parseSpec;
-
-      // Create a layer with the acquired GitService for providing to fetch helpers
-      const gitLayer = Layer.succeed(GitService, git);
 
       const fetch = (spec: PackageSpec, destPath: string, options?: FetchOptions) =>
         Effect.gen(function* () {
@@ -52,33 +49,33 @@ export class RegistryService extends Context.Tag("@cvr/repo/services/registry/Re
 
           switch (spec.registry) {
             case "github":
-              yield* fetchGithub(spec, destPath, depth).pipe(Effect.provide(gitLayer));
+              yield* fetchGithub(git, spec, destPath, depth);
               break;
             case "npm":
-              yield* fetchNpm(spec, destPath, depth).pipe(Effect.provide(gitLayer));
+              yield* fetchNpm(git, spec, destPath, depth);
               break;
             case "pypi":
-              yield* fetchPypi(spec, destPath, depth).pipe(Effect.provide(gitLayer));
+              yield* fetchPypi(git, spec, destPath, depth);
               break;
             case "crates":
-              yield* fetchCrates(spec, destPath, depth).pipe(Effect.provide(gitLayer));
+              yield* fetchCrates(git, spec, destPath, depth);
               break;
           }
         });
 
-      return RegistryService.of({ parseSpec: parseSpecFn, fetch });
+      return { parseSpec: parseSpecFn, fetch };
     }),
   );
 }
 
-// Fetch helpers - these access GitService from context
+// Fetch helpers - git is passed as closure variable from the layer constructor
 
 const fetchGithub = Effect.fn("RegistryService.fetchGithub")(function* (
+  git: ServiceMap.Service.Shape<typeof GitService>,
   spec: PackageSpec,
   destPath: string,
   depth?: number,
 ) {
-  const git = yield* GitService;
   const url = `https://github.com/${spec.name}.git`;
   const ref = Option.getOrUndefined(spec.version);
 
@@ -166,12 +163,12 @@ function getCloneUrl(info: RepoInfo): string {
 
 // Clone from any supported git host
 const cloneFromRepoInfo = Effect.fn("RegistryService.cloneFromRepoInfo")(function* (
+  git: ServiceMap.Service.Shape<typeof GitService>,
   info: RepoInfo,
   destPath: string,
   ref: string | undefined,
   depth?: number,
 ) {
-  const git = yield* GitService;
   const url = getCloneUrl(info);
 
   const cloneOptions: { depth?: number; ref?: string } = {};
@@ -191,6 +188,7 @@ const cloneFromRepoInfo = Effect.fn("RegistryService.cloneFromRepoInfo")(functio
 });
 
 const fetchNpm = Effect.fn("RegistryService.fetchNpm")(function* (
+  git: ServiceMap.Service.Shape<typeof GitService>,
   spec: PackageSpec,
   destPath: string,
   depth?: number,
@@ -248,11 +246,11 @@ const fetchNpm = Effect.fn("RegistryService.fetchNpm")(function* (
   if (repoInfo !== null) {
     // Try to clone from source repo first
     const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`;
-    const cloneResult = yield* cloneFromRepoInfo(repoInfo, destPath, gitRef, depth).pipe(
-      Effect.either,
+    const cloneResult = yield* cloneFromRepoInfo(git, repoInfo, destPath, gitRef, depth).pipe(
+      Effect.result,
     );
 
-    if (cloneResult._tag === "Right") {
+    if (Result.isSuccess(cloneResult)) {
       return; // Success - cloned from source repo
     }
     // Clone failed, fall back to tarball
@@ -272,6 +270,7 @@ const fetchNpm = Effect.fn("RegistryService.fetchNpm")(function* (
 });
 
 const fetchPypi = Effect.fn("RegistryService.fetchPypi")(function* (
+  git: ServiceMap.Service.Shape<typeof GitService>,
   spec: PackageSpec,
   destPath: string,
   depth?: number,
@@ -319,11 +318,11 @@ const fetchPypi = Effect.fn("RegistryService.fetchPypi")(function* (
     // Try to clone from source repo first
     const resolvedVersion = data.info.version;
     const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`;
-    const cloneResult = yield* cloneFromRepoInfo(repoInfo, destPath, gitRef, depth).pipe(
-      Effect.either,
+    const cloneResult = yield* cloneFromRepoInfo(git, repoInfo, destPath, gitRef, depth).pipe(
+      Effect.result,
     );
 
-    if (cloneResult._tag === "Right") {
+    if (Result.isSuccess(cloneResult)) {
       return; // Success - cloned from source repo
     }
     // Clone failed, fall back to tarball
@@ -371,6 +370,7 @@ function extractRepoInfoFromPypi(info: {
 }
 
 const fetchCrates = Effect.fn("RegistryService.fetchCrates")(function* (
+  git: ServiceMap.Service.Shape<typeof GitService>,
   spec: PackageSpec,
   destPath: string,
   depth?: number,
@@ -427,11 +427,11 @@ const fetchCrates = Effect.fn("RegistryService.fetchCrates")(function* (
     // Try to clone from source repo first
     const resolvedVersion = versionInfo.num;
     const gitRef = resolvedVersion.startsWith("v") ? resolvedVersion : `v${resolvedVersion}`;
-    const cloneResult = yield* cloneFromRepoInfo(repoInfo, destPath, gitRef, depth).pipe(
-      Effect.either,
+    const cloneResult = yield* cloneFromRepoInfo(git, repoInfo, destPath, gitRef, depth).pipe(
+      Effect.result,
     );
 
-    if (cloneResult._tag === "Right") {
+    if (Result.isSuccess(cloneResult)) {
       return; // Success - cloned from source repo
     }
     // Clone failed, fall back to tarball
@@ -514,7 +514,7 @@ const downloadAndExtractTarball = Effect.fn("RegistryService.downloadAndExtractT
         operation: "cleanup-temp",
         cause: new Error("Failed to cleanup temp file"),
       }),
-  }).pipe(Effect.ignore);
+  }).pipe(Effect.ignoreCause);
 
   if (exitCode !== 0) {
     return yield* new RegistryError({

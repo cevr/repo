@@ -34,34 +34,31 @@ export function createMockRegistryService(options: CreateMockRegistryServiceOpti
     ...initialState,
     fetchedSpecs: new Map(initialState.fetchedSpecs ?? []),
   };
-  const stateRef = Ref.unsafeMake(state);
+  const stateRef = Ref.makeUnsafe(state);
 
   const record = (method: string, args: unknown, result?: unknown): Effect.Effect<void> =>
     sequenceRef !== undefined
       ? recordCall(sequenceRef, { service: "registry", method, args, result })
       : Effect.void;
 
-  const layer = Layer.succeed(
-    RegistryService,
-    RegistryService.of({
-      parseSpec: (input) =>
-        Effect.gen(function* () {
-          const result = parseSpecOrThrow(input);
-          yield* record("parseSpec", { input }, result);
-          return result;
-        }),
+  const layer = Layer.succeed(RegistryService, {
+    parseSpec: (input) =>
+      Effect.gen(function* () {
+        const result = parseSpecOrThrow(input);
+        yield* record("parseSpec", { input }, result);
+        return result;
+      }),
 
-      fetch: (spec, destPath, options) =>
-        Effect.gen(function* () {
-          yield* record("fetch", { spec, destPath, options });
-          yield* Ref.update(stateRef, (s) => {
-            const newFetched = new Map(s.fetchedSpecs);
-            newFetched.set(destPath, spec);
-            return { ...s, fetchedSpecs: newFetched };
-          });
-        }),
-    }),
-  );
+    fetch: (spec, destPath, fetchOpts) =>
+      Effect.gen(function* () {
+        yield* record("fetch", { spec, destPath, options: fetchOpts });
+        yield* Ref.update(stateRef, (s) => {
+          const newFetched = new Map(s.fetchedSpecs);
+          newFetched.set(destPath, spec);
+          return { ...s, fetchedSpecs: newFetched };
+        });
+      }),
+  });
 
   return {
     layer,

@@ -1,41 +1,36 @@
-import { Args, Command, Options } from "@effect/cli";
+import { Argument, Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Option } from "effect";
 import { MetadataService } from "../services/metadata.js";
 import { handleCommandError } from "./shared.js";
 
-const queryArg = Args.text({ name: "query" }).pipe(
-  Args.withDescription("Search pattern (regex supported)"),
+const queryArg = Argument.string("query").pipe(
+  Argument.withDescription("Search pattern (regex supported)"),
 );
 
-const registryOption = Options.choice("registry", [
-  "github",
-  "npm",
-  "pypi",
-  "crates",
-] as const).pipe(
-  Options.withAlias("r"),
-  Options.optional,
-  Options.withDescription("Filter by registry"),
+const registryFlag = Flag.choice("registry", ["github", "npm", "pypi", "crates"] as const).pipe(
+  Flag.withAlias("r"),
+  Flag.optional,
+  Flag.withDescription("Filter by registry"),
 );
 
-const typeOption = Options.text("type").pipe(
-  Options.withAlias("t"),
-  Options.optional,
-  Options.withDescription("File type filter (e.g., ts, py, rs)"),
+const typeFlag = Flag.string("type").pipe(
+  Flag.withAlias("t"),
+  Flag.optional,
+  Flag.withDescription("File type filter (e.g., ts, py, rs)"),
 );
 
-const contextOption = Options.integer("context").pipe(
-  Options.withDefault(2),
-  Options.withDescription("Lines of context around matches"),
+const contextFlag = Flag.integer("context").pipe(
+  Flag.withDefault(2),
+  Flag.withDescription("Lines of context around matches"),
 );
 
 export const search = Command.make(
   "search",
   {
     query: queryArg,
-    registry: registryOption,
-    type: typeOption,
-    context: contextOption,
+    registry: registryFlag,
+    type: typeFlag,
+    context: contextFlag,
   },
   ({ query, registry, type, context }) =>
     Effect.gen(function* () {
@@ -85,5 +80,5 @@ export const search = Command.make(
       } else {
         yield* Console.log("No matches found.");
       }
-    }).pipe(Effect.catchAll(handleCommandError)),
+    }).pipe(Effect.catch(handleCommandError)),
 );

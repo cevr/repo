@@ -1,15 +1,17 @@
-import { Command, Options } from "@effect/cli";
+import { Command, Flag } from "effect/unstable/cli";
 import { Console, Effect, Schema } from "effect";
 import { formatBytes, type Registry } from "../types.js";
 import { MetadataService } from "../services/metadata.js";
 import { CacheService } from "../services/cache.js";
 
-const jsonOption = Options.boolean("json").pipe(
-  Options.withDefault(false),
-  Options.withDescription("Output as JSON"),
+const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
+
+const jsonFlag = Flag.boolean("json").pipe(
+  Flag.withDefault(false),
+  Flag.withDescription("Output as JSON"),
 );
 
-export const stats = Command.make("stats", { json: jsonOption }, ({ json }) =>
+export const stats = Command.make("stats", { json: jsonFlag }, ({ json }) =>
   Effect.gen(function* () {
     const metadata = yield* MetadataService;
     const cache = yield* CacheService;
@@ -60,7 +62,7 @@ export const stats = Command.make("stats", { json: jsonOption }, ({ json }) =>
               }
             : null,
       };
-      const jsonStr = yield* Schema.encode(Schema.parseJson(Schema.Unknown))(output);
+      const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
       yield* Console.log(jsonStr);
       return;
     }

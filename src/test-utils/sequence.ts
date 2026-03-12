@@ -37,7 +37,7 @@ export type SequenceRef = Ref.Ref<RecordedCall[]>;
  * Create a new sequence ref for recording calls.
  */
 export function createSequenceRef(): SequenceRef {
-  return Ref.unsafeMake<RecordedCall[]>([]);
+  return Ref.makeUnsafe<RecordedCall[]>([]);
 }
 
 /**

@@ -1,9 +1,8 @@
-import { FileSystem, Path } from "@effect/platform";
-import { Context, Effect, Layer, Option } from "effect";
+import { Effect, FileSystem, Layer, Option, Path, ServiceMap } from "effect";
 import type { PackageSpec } from "../types.js";
 
 // Service interface
-export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheService")<
+export class CacheService extends ServiceMap.Service<
   CacheService,
   {
     readonly cacheDir: string;
@@ -14,7 +13,7 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
     readonly getSize: (path: string) => Effect.Effect<number>;
     readonly ensureDir: (path: string) => Effect.Effect<void>;
   }
->() {
+>()("@cvr/repo/services/cache/CacheService") {
   // Live layer using real filesystem
   static readonly layer = Layer.effect(
     CacheService,
@@ -28,8 +27,8 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
       yield* fs
         .makeDirectory(cacheDir, { recursive: true })
         .pipe(
-          Effect.catchTag("SystemError", (e) =>
-            e.reason === "AlreadyExists" ? Effect.void : Effect.fail(e),
+          Effect.catchTag("PlatformError", (e) =>
+            e.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(e),
           ),
         );
 
@@ -86,7 +85,7 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
         Effect.gen(function* () {
           const path = yield* getPath(spec);
           return yield* fs.exists(path);
-        }).pipe(Effect.orElse(() => Effect.succeed(false)));
+        }).pipe(Effect.catch(() => Effect.succeed(false)));
 
       const remove = (path: string) =>
         Effect.gen(function* () {
@@ -94,7 +93,7 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
           if (pathExists) {
             yield* fs.remove(path, { recursive: true });
           }
-        }).pipe(Effect.ignore);
+        }).pipe(Effect.ignoreCause);
 
       const removeAll = () =>
         Effect.gen(function* () {
@@ -103,7 +102,7 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
             yield* fs.remove(cacheDir, { recursive: true });
             yield* fs.makeDirectory(cacheDir, { recursive: true });
           }
-        }).pipe(Effect.ignore);
+        }).pipe(Effect.ignoreCause);
 
       const getSize = (path: string): Effect.Effect<number> =>
         Effect.gen(function* () {
@@ -122,20 +121,20 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
                 return sizes.reduce((a, b) => a + b, 0);
               }
               return Number(stat.size);
-            }).pipe(Effect.orElse(() => Effect.succeed(0)));
+            }).pipe(Effect.catch(() => Effect.succeed(0)));
 
           return yield* calculateSize(path);
-        }).pipe(Effect.orElse(() => Effect.succeed(0)));
+        }).pipe(Effect.catch(() => Effect.succeed(0)));
 
       const ensureDir = (path: string) =>
         fs.makeDirectory(path, { recursive: true }).pipe(
-          Effect.catchTag("SystemError", (e) =>
-            e.reason === "AlreadyExists" ? Effect.void : Effect.fail(e),
+          Effect.catchTag("PlatformError", (e) =>
+            e.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(e),
           ),
-          Effect.orElse(() => Effect.void),
+          Effect.catch(() => Effect.void),
         );
 
-      return CacheService.of({
+      return {
         cacheDir,
         getPath,
         exists,
@@ -143,7 +142,7 @@ export class CacheService extends Context.Tag("@cvr/repo/services/cache/CacheSer
         removeAll,
         getSize,
         ensureDir,
-      });
+      };
     }),
   );
 }

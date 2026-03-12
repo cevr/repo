@@ -1,6 +1,6 @@
 // @effect-diagnostics strictEffectProvide:off
 import { Effect, Option } from "effect";
-import { describe, expect, it } from "@effect/vitest";
+import { describe, expect, it } from "effect-bun-test";
 import { createTestLayer } from "../src/test-utils/index.js";
 import { RegistryService } from "../src/services/registry.js";
 import { GitService } from "../src/services/git.js";
