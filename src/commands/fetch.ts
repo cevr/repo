@@ -1,11 +1,13 @@
 import { Argument, Command, Flag } from "effect/unstable/cli";
-import { Console, Effect } from "effect";
+import { Clock, Console, Effect, Option, Path, Schema } from "effect";
 import { formatBytes, specToString } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
 import { handleCommandError } from "./shared.js";
+
+const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
 
 const specArg = Argument.string("spec").pipe(
   Argument.withDescription(
@@ -19,107 +21,134 @@ const forceFlag = Flag.boolean("force").pipe(
   Flag.withDescription("Force re-clone (removes existing and clones fresh)"),
 );
 
-const fullHistoryFlag = Flag.boolean("full").pipe(
+const jsonFlag = Flag.boolean("json").pipe(
   Flag.withDefault(false),
-  Flag.withDescription("Clone full git history (default: shallow clone with depth 100)"),
+  Flag.withDescription("Output as JSON"),
 );
 
 export const fetch = Command.make(
   "fetch",
-  { spec: specArg, force: forceFlag, full: fullHistoryFlag },
-  ({ spec, force, full }) =>
+  { spec: specArg, force: forceFlag, json: jsonFlag },
+  ({ spec, force, json }) =>
     Effect.gen(function* () {
       const registry = yield* RegistryService;
       const cache = yield* CacheService;
       const metadata = yield* MetadataService;
       const git = yield* GitService;
+      const pathService = yield* Path.Path;
 
-      // Parse the spec
       const parsedSpec = yield* registry.parseSpec(spec);
       const specStr = specToString(parsedSpec);
 
-      // Check if already cached
-      const existing = yield* metadata.find(parsedSpec);
+      const existingOpt = yield* metadata.find(parsedSpec);
       const destPath = yield* cache.getPath(parsedSpec);
 
-      if (existing !== null) {
+      let fresh = false;
+
+      if (Option.isSome(existingOpt)) {
+        const existing = existingOpt.value;
         const isGit = yield* git.isGitRepo(existing.path);
 
         if (force) {
-          // Force: remove and re-clone
-          yield* Console.log(`Force re-fetching ${specStr}...`);
+          yield* Console.error(`Force re-fetching ${specStr}...`);
           yield* cache.remove(existing.path);
           yield* metadata.remove(parsedSpec);
+          fresh = true;
         } else if (isGit) {
-          // Git repo: always pull latest
-          yield* Console.log(`Updating ${specStr}...`);
+          yield* Console.error(`Updating ${specStr}...`);
           yield* git
             .update(existing.path)
             .pipe(
-              Effect.catch((e) => Console.log(`Update failed, repo may be up to date: ${e._tag}`)),
+              Effect.catch((e) =>
+                Console.error(`Update failed, repo may be up to date: ${e._tag}`),
+              ),
             );
 
-          // Recalculate size after update
           const sizeBytes = yield* cache.getSize(existing.path);
           const currentRef = yield* git
             .getCurrentRef(existing.path)
             .pipe(Effect.orElseSucceed(() => "unknown"));
 
+          const nowMs = yield* Clock.currentTimeMillis;
+          const now = new Date(nowMs).toISOString();
           yield* metadata.add({
             spec: parsedSpec,
             fetchedAt: existing.fetchedAt,
-            lastAccessedAt: new Date().toISOString(),
+            lastAccessedAt: now,
             sizeBytes,
             path: existing.path,
           });
 
-          yield* Console.log(`Updated: ${existing.path}`);
-          yield* Console.log(`Current ref: ${currentRef}`);
-          yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
+          yield* Console.error(`Updated: ${existing.path}`);
+          yield* Console.error(`Ref: ${currentRef}`);
+          yield* Console.error(`Size: ${formatBytes(sizeBytes)}`);
+
+          if (json) {
+            const output = { path: existing.path, size: sizeBytes, ref: currentRef, fresh: false };
+            const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
+            yield* Console.log(jsonStr);
+          } else {
+            yield* Console.log(existing.path);
+          }
           return;
         } else {
-          // Not a git repo, can't update
           yield* metadata.updateAccessTime(parsedSpec);
-          yield* Console.log(`Already cached at: ${existing.path}`);
-          yield* Console.log(`Size: ${formatBytes(existing.sizeBytes)}`);
-          yield* Console.log(`Use --force to re-fetch from scratch`);
+          yield* Console.error(`Already cached: ${specStr}`);
+          yield* Console.error(`Size: ${formatBytes(existing.sizeBytes)}`);
+
+          if (json) {
+            const output = {
+              path: existing.path,
+              size: existing.sizeBytes,
+              ref: null,
+              fresh: false,
+            };
+            const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
+            yield* Console.log(jsonStr);
+          } else {
+            yield* Console.log(existing.path);
+          }
           return;
         }
+      } else {
+        fresh = true;
       }
 
       // Fresh fetch
-      yield* Console.log(`Fetching ${specStr}...`);
+      yield* Console.error(`Fetching ${specStr}...`);
 
-      // Ensure parent directory exists
-      const parentPath = destPath.split("/").slice(0, -1).join("/");
+      const parentPath = pathService.dirname(destPath);
       yield* cache.ensureDir(parentPath);
 
-      // Fetch from registry
-      yield* registry.fetch(parsedSpec, destPath, { fullHistory: full });
+      yield* registry.fetch(parsedSpec, destPath);
 
-      // Calculate size
       const sizeBytes = yield* cache.getSize(destPath);
 
-      // Get current ref if it's a git repo
       const isGit = yield* git.isGitRepo(destPath);
+      let currentRef: string | null = null;
       if (isGit) {
-        const currentRef = yield* git
-          .getCurrentRef(destPath)
-          .pipe(Effect.orElseSucceed(() => "unknown"));
-        yield* Console.log(`Ref: ${currentRef}`);
+        currentRef = yield* git.getCurrentRef(destPath).pipe(Effect.orElseSucceed(() => "unknown"));
+        yield* Console.error(`Ref: ${currentRef}`);
       }
 
-      // Update metadata
-      const now = new Date().toISOString();
+      const freshNowMs = yield* Clock.currentTimeMillis;
+      const freshNow = new Date(freshNowMs).toISOString();
       yield* metadata.add({
         spec: parsedSpec,
-        fetchedAt: now,
-        lastAccessedAt: now,
+        fetchedAt: freshNow,
+        lastAccessedAt: freshNow,
         sizeBytes,
         path: destPath,
       });
 
-      yield* Console.log(`Fetched to: ${destPath}`);
-      yield* Console.log(`Size: ${formatBytes(sizeBytes)}`);
+      yield* Console.error(`Size: ${formatBytes(sizeBytes)}`);
+
+      if (json) {
+        const output = { path: destPath, size: sizeBytes, ref: currentRef, fresh };
+        const jsonStr = yield* Schema.encodeEffect(JsonUnknown)(output);
+        yield* Console.log(jsonStr);
+      } else {
+        yield* Console.log(destPath);
+      }
     }).pipe(Effect.catch(handleCommandError)),
 );

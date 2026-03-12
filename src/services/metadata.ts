@@ -1,10 +1,21 @@
-import { Effect, FileSystem, Layer, Option, Path, Ref, Schema, ServiceMap } from "effect";
+import {
+  Clock,
+  Config,
+  Effect,
+  FileSystem,
+  Layer,
+  Option,
+  Path,
+  Ref,
+  Schema,
+  ServiceMap,
+} from "effect";
 import type { PackageSpec, RepoMetadata } from "../types.js";
-import { MetadataIndex } from "../types.js";
+import { MetadataIndex, specMatches } from "../types.js";
 
 // In-memory cache state
 interface CacheState {
-  index: MetadataIndex | null;
+  index: Option.Option<MetadataIndex>;
   dirty: boolean;
 }
 
@@ -17,15 +28,10 @@ export class MetadataService extends ServiceMap.Service<
     readonly load: () => Effect.Effect<MetadataIndex>;
     readonly save: (index: MetadataIndex) => Effect.Effect<void>;
     readonly add: (metadata: RepoMetadata) => Effect.Effect<void>;
-    readonly addMany: (metadata: readonly RepoMetadata[]) => Effect.Effect<void>;
     readonly remove: (spec: PackageSpec) => Effect.Effect<boolean>;
-    readonly removeMany: (specs: readonly PackageSpec[]) => Effect.Effect<number>;
-    readonly find: (spec: PackageSpec) => Effect.Effect<RepoMetadata | null>;
+    readonly find: (spec: PackageSpec) => Effect.Effect<Option.Option<RepoMetadata>>;
     readonly updateAccessTime: (spec: PackageSpec) => Effect.Effect<void>;
-    readonly findOlderThan: (days: number) => Effect.Effect<readonly RepoMetadata[]>;
-    readonly findLargerThan: (bytes: number) => Effect.Effect<readonly RepoMetadata[]>;
     readonly all: () => Effect.Effect<readonly RepoMetadata[]>;
-    readonly flush: () => Effect.Effect<void>;
   }
 >()("@cvr/repo/services/metadata/MetadataService") {
   // Live layer using real filesystem with in-memory caching
@@ -34,25 +40,12 @@ export class MetadataService extends ServiceMap.Service<
     Effect.gen(function* () {
       const fs = yield* FileSystem.FileSystem;
       const pathService = yield* Path.Path;
-      const home = process.env.HOME ?? "~";
+      const home = yield* Config.string("HOME").pipe(Config.withDefault("~"));
       const cacheDir = pathService.join(home, ".cache", "repo");
       const metadataPath = pathService.join(cacheDir, "metadata.json");
 
-      // In-memory cache
-      const cacheRef = yield* Ref.make<CacheState>({ index: null, dirty: false });
+      const cacheRef = yield* Ref.make<CacheState>({ index: Option.none(), dirty: false });
 
-      const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
-        if (a.registry !== b.registry) return false;
-        // GitHub repos are case-insensitive (legacy cached repos may have different casing)
-        const aName = a.registry === "github" ? a.name.toLowerCase() : a.name;
-        const bName = b.registry === "github" ? b.name.toLowerCase() : b.name;
-        if (aName !== bName) return false;
-        const aVersion = Option.getOrElse(a.version, () => "");
-        const bVersion = Option.getOrElse(b.version, () => "");
-        return aVersion === bVersion;
-      };
-
-      // Load from disk (bypasses cache)
       const loadFromDisk = (): Effect.Effect<MetadataIndex> =>
         Effect.gen(function* () {
           const exists = yield* fs.exists(metadataPath);
@@ -63,55 +56,37 @@ export class MetadataService extends ServiceMap.Service<
           return yield* Schema.decodeUnknownEffect(MetadataIndexJson)(content);
         }).pipe(Effect.catch(() => Effect.succeed({ version: 1, repos: [] })));
 
-      // Load with caching
       const load = (): Effect.Effect<MetadataIndex> =>
         Effect.gen(function* () {
           const cache = yield* Ref.get(cacheRef);
-          if (cache.index !== null) {
-            return cache.index;
+          if (Option.isSome(cache.index)) {
+            return cache.index.value;
           }
           const index = yield* loadFromDisk();
-          yield* Ref.set(cacheRef, { index, dirty: false });
+          yield* Ref.set(cacheRef, { index: Option.some(index), dirty: false });
           return index;
         });
 
-      // Atomic save to disk (write temp, rename)
       const saveToDisk = (index: MetadataIndex): Effect.Effect<void> =>
         Effect.gen(function* () {
           yield* fs
             .makeDirectory(cacheDir, { recursive: true })
-            .pipe(
-              Effect.catchTag("PlatformError", (e) =>
-                e.reason._tag === "AlreadyExists" ? Effect.void : Effect.fail(e),
-              ),
-            );
+            .pipe(Effect.catchTag("PlatformError", () => Effect.void));
           const jsonStr = yield* Schema.encodeEffect(MetadataIndexJson)(index);
-          // Atomic write: temp file then rename
-          const tempPath = `${metadataPath}.tmp.${Date.now()}`;
+          const now = yield* Clock.currentTimeMillis;
+          const tempPath = `${metadataPath}.tmp.${now}`;
           yield* fs.writeFileString(tempPath, jsonStr);
           yield* fs.rename(tempPath, metadataPath);
-        }).pipe(Effect.catch(() => Effect.void));
+        }).pipe(Effect.catch((e) => Effect.logWarning(`Failed to save metadata: ${e}`)));
 
-      // Save updates cache and persists
       const save = (index: MetadataIndex): Effect.Effect<void> =>
         Effect.gen(function* () {
-          yield* Ref.set(cacheRef, { index, dirty: false });
           yield* saveToDisk(index);
+          yield* Ref.set(cacheRef, { index: Option.some(index), dirty: false });
         });
 
-      // Flush dirty cache to disk
-      const flush = (): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const cache = yield* Ref.get(cacheRef);
-          if (cache.dirty && cache.index !== null) {
-            yield* saveToDisk(cache.index);
-            yield* Ref.update(cacheRef, (c) => ({ ...c, dirty: false }));
-          }
-        });
-
-      // Update cache without immediate persist (mark dirty)
       const updateCache = (index: MetadataIndex): Effect.Effect<void> =>
-        Ref.set(cacheRef, { index, dirty: true });
+        Ref.set(cacheRef, { index: Option.some(index), dirty: true });
 
       const add = (metadata: RepoMetadata): Effect.Effect<void> =>
         Effect.gen(function* () {
@@ -122,17 +97,6 @@ export class MetadataService extends ServiceMap.Service<
             repos: [...filtered, metadata],
           };
           yield* save(newIndex);
-        });
-
-      const addMany = (metadata: readonly RepoMetadata[]): Effect.Effect<void> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          let repos = [...index.repos];
-          for (const m of metadata) {
-            repos = repos.filter((r) => !specMatches(r.spec, m.spec));
-            repos.push(m);
-          }
-          yield* save({ ...index, repos });
         });
 
       const remove = (spec: PackageSpec): Effect.Effect<boolean> =>
@@ -147,72 +111,31 @@ export class MetadataService extends ServiceMap.Service<
           return true;
         });
 
-      const removeMany = (specs: readonly PackageSpec[]): Effect.Effect<number> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          const originalLength = index.repos.length;
-          const filtered = index.repos.filter(
-            (r) => !specs.some((spec) => specMatches(r.spec, spec)),
-          );
-          const removedCount = originalLength - filtered.length;
-          if (removedCount > 0) {
-            yield* save({ ...index, repos: filtered });
-          }
-          return removedCount;
-        });
-
-      const find = (spec: PackageSpec): Effect.Effect<RepoMetadata | null> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          return index.repos.find((r) => specMatches(r.spec, spec)) ?? null;
-        });
+      const find = (spec: PackageSpec): Effect.Effect<Option.Option<RepoMetadata>> =>
+        load().pipe(
+          Effect.map((index) =>
+            Option.fromNullishOr(index.repos.find((r) => specMatches(r.spec, spec))),
+          ),
+        );
 
       const updateAccessTime = (spec: PackageSpec): Effect.Effect<void> =>
         Effect.gen(function* () {
           const index = yield* load();
+          const now = yield* Clock.currentTimeMillis;
+          const nowStr = new Date(Number(now)).toISOString();
           const updated = index.repos.map((r) => {
             if (specMatches(r.spec, spec)) {
-              return { ...r, lastAccessedAt: new Date().toISOString() };
+              return { ...r, lastAccessedAt: nowStr };
             }
             return r;
           });
-          // Access time updates can be lazy - mark dirty but don't persist immediately
           yield* updateCache({ ...index, repos: updated });
         });
 
-      const findOlderThan = (days: number): Effect.Effect<readonly RepoMetadata[]> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-          return index.repos.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
-        });
-
-      const findLargerThan = (bytes: number): Effect.Effect<readonly RepoMetadata[]> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          return index.repos.filter((r) => r.sizeBytes > bytes);
-        });
-
       const all = (): Effect.Effect<readonly RepoMetadata[]> =>
-        Effect.gen(function* () {
-          const index = yield* load();
-          return index.repos;
-        });
+        load().pipe(Effect.map((index) => index.repos));
 
-      return {
-        load,
-        save,
-        add,
-        addMany,
-        remove,
-        removeMany,
-        find,
-        updateAccessTime,
-        findOlderThan,
-        findLargerThan,
-        all,
-        flush,
-      };
+      return { load, save, add, remove, find, updateAccessTime, all };
     }),
   );
 }

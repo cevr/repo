@@ -9,11 +9,7 @@ import { rootCommand } from "../commands/root.js";
 import { createTestLayer, type CreateTestLayerOptions } from "./index.js";
 import type { ExpectedCall, RecordedCall } from "./sequence.js";
 
-// ─── Re-export types ───────────────────────────────────────────────────────────
-
 export type { ExpectedCall } from "./sequence.js";
-
-// ─── Sequence Matching ────────────────────────────────────────────────────────
 
 function assertSequenceContains(actual: RecordedCall[], expected: ExpectedCall[]): void {
   let actualIndex = 0;
@@ -47,8 +43,6 @@ function assertSequenceContains(actual: RecordedCall[], expected: ExpectedCall[]
   }
 }
 
-// ─── CLI Runner Helpers ───────────────────────────────────────────────────────
-
 function runWithLayer(args: string[], layerOptions: CreateTestLayerOptions) {
   const { layer, sequenceRef } = createTestLayer(layerOptions);
   const cli = Command.runWith(rootCommand, { version: "0.0.0-test" });
@@ -56,8 +50,6 @@ function runWithLayer(args: string[], layerOptions: CreateTestLayerOptions) {
   const run = cli(args).pipe(Effect.provide(fullLayer), Effect.result);
   return { run, sequenceRef };
 }
-
-// ─── CLI Test Runner ──────────────────────────────────────────────────────────
 
 export interface CliTestRunner {
   expectSequence(expected: ExpectedCall[]): Effect.Effect<void>;
@@ -102,11 +94,7 @@ function createCliTestRunner(args: string[], layerOptions: CreateTestLayerOption
   };
 }
 
-// ─── Main API ─────────────────────────────────────────────────────────────────
-
-/**
- * Creates a CLI test runner with the given arguments and options.
- */
+/** Creates a CLI test runner with the given arguments and options. */
 export function runCli(args: string, options: CreateTestLayerOptions = {}): CliTestRunner {
   return createCliTestRunner(args.split(/\s+/), options);
 }

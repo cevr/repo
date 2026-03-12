@@ -67,8 +67,8 @@ export const list = Command.make(
       }
 
       if (sorted.length === 0) {
-        yield* Console.log("No repositories cached.");
-        yield* Console.log('Use "repo fetch <spec>" to cache a repository.');
+        yield* Console.error("No repositories cached.");
+        yield* Console.error('Use "repo fetch <spec>" to cache a repository.');
         return;
       }
 

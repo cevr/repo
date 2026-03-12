@@ -1,5 +1,5 @@
 import { Argument, Command } from "effect/unstable/cli";
-import { Console, Effect } from "effect";
+import { Console, Effect, Option } from "effect";
 import { specToString, formatBytes } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
@@ -14,23 +14,20 @@ export const remove = Command.make("remove", { spec: specArg }, ({ spec }) =>
     const cache = yield* CacheService;
     const metadata = yield* MetadataService;
 
-    // Parse the spec
     const parsedSpec = yield* registry.parseSpec(spec);
 
-    // Find in metadata
-    const existing = yield* metadata.find(parsedSpec);
-    if (existing === null) {
-      yield* Console.log(`Not found: ${specToString(parsedSpec)}`);
+    const existingOpt = yield* metadata.find(parsedSpec);
+    if (Option.isNone(existingOpt)) {
+      yield* Console.error(`Not found: ${specToString(parsedSpec)}`);
       return;
     }
 
-    // Remove from cache
+    const existing = existingOpt.value;
     yield* cache.remove(existing.path);
-
-    // Remove from metadata
     yield* metadata.remove(parsedSpec);
 
-    yield* Console.log(`Removed: ${specToString(parsedSpec)}`);
-    yield* Console.log(`Freed: ${formatBytes(existing.sizeBytes)}`);
+    yield* Console.error(`Removed: ${specToString(parsedSpec)}`);
+    yield* Console.error(`Freed: ${formatBytes(existing.sizeBytes)}`);
+    yield* Console.log(existing.path);
   }).pipe(Effect.catch(handleCommandError)),
 );

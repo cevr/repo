@@ -3,8 +3,6 @@ import { CacheService } from "../../services/cache.js";
 import type { PackageSpec } from "../../types.js";
 import { recordCall, type SequenceRef } from "../sequence.js";
 
-// ─── Mock State ───────────────────────────────────────────────────────────────
-
 export interface MockCacheState {
   store: Map<string, { content: string; size: number }>;
   cacheDir: string;
@@ -15,8 +13,6 @@ export const defaultMockCacheState: MockCacheState = {
   cacheDir: "/tmp/test-repo-cache",
 };
 
-// ─── Mock Implementation ──────────────────────────────────────────────────────
-
 export interface CreateMockCacheServiceOptions {
   initialState?: Partial<MockCacheState>;
   sequenceRef?: SequenceRef;
@@ -26,7 +22,6 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
   layer: Layer.Layer<CacheService>;
   stateRef: Ref.Ref<MockCacheState>;
   getState: () => Effect.Effect<MockCacheState>;
-  /** Add a file to the mock cache (for test setup) */
   addFile: (path: string, size: number) => Effect.Effect<void>;
 } {
   const initialState = options.initialState ?? {};
@@ -67,15 +62,6 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
     cacheDir: state.cacheDir,
 
     getPath,
-
-    exists: (spec) =>
-      Effect.gen(function* () {
-        const path = yield* getPath(spec);
-        const s = yield* Ref.get(stateRef);
-        const result = s.store.has(path);
-        yield* record("exists", { spec }, result);
-        return result;
-      }),
 
     remove: (path) =>
       Effect.gen(function* () {
@@ -127,7 +113,5 @@ export function createMockCacheService(options: CreateMockCacheServiceOptions = 
     addFile,
   };
 }
-
-// ─── Preset Configurations ────────────────────────────────────────────────────
 
 export const MockCacheServiceDefault = createMockCacheService();

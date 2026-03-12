@@ -1,5 +1,3 @@
-// Re-export all mock service factories and types
-
 export {
   createMockGitService,
   defaultMockGitState,

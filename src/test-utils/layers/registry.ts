@@ -1,10 +1,8 @@
 import { Effect, Layer, Ref } from "effect";
 import { RegistryService } from "../../services/registry.js";
 import type { PackageSpec } from "../../types.js";
-import { parseSpecOrThrow } from "../../parsing.js";
+import { parseSpec } from "../../parsing.js";
 import { recordCall, type SequenceRef } from "../sequence.js";
-
-// ─── Mock State ───────────────────────────────────────────────────────────────
 
 export interface MockRegistryState {
   fetchedSpecs: Map<string, PackageSpec>;
@@ -13,8 +11,6 @@ export interface MockRegistryState {
 export const defaultMockRegistryState: MockRegistryState = {
   fetchedSpecs: new Map(),
 };
-
-// ─── Mock Implementation ──────────────────────────────────────────────────────
 
 export interface CreateMockRegistryServiceOptions {
   initialState?: Partial<MockRegistryState>;
@@ -44,14 +40,14 @@ export function createMockRegistryService(options: CreateMockRegistryServiceOpti
   const layer = Layer.succeed(RegistryService, {
     parseSpec: (input) =>
       Effect.gen(function* () {
-        const result = parseSpecOrThrow(input);
+        const result = yield* parseSpec(input);
         yield* record("parseSpec", { input }, result);
         return result;
       }),
 
-    fetch: (spec, destPath, fetchOpts) =>
+    fetch: (spec, destPath) =>
       Effect.gen(function* () {
-        yield* record("fetch", { spec, destPath, options: fetchOpts });
+        yield* record("fetch", { spec, destPath });
         yield* Ref.update(stateRef, (s) => {
           const newFetched = new Map(s.fetchedSpecs);
           newFetched.set(destPath, spec);
@@ -66,7 +62,5 @@ export function createMockRegistryService(options: CreateMockRegistryServiceOpti
     getState: () => Ref.get(stateRef),
   };
 }
-
-// ─── Preset Configurations ────────────────────────────────────────────────────
 
 export const MockRegistryServiceDefault = createMockRegistryService();

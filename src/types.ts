@@ -3,45 +3,7 @@ import { Option, Schema } from "effect";
 // Registry types
 export type Registry = "github" | "npm" | "pypi" | "crates";
 
-// ─── Branded Name Types ───────────────────────────────────────────────────────
-
-// GitHub repo name: owner/repo format (lowercase after parsing normalization)
-export const GitHubRepoName = Schema.String.check(
-  Schema.isPattern(/^[a-z0-9_.-]+\/[a-z0-9_.-]+$/i),
-).pipe(Schema.brand("GitHubRepoName"));
-export type GitHubRepoName = typeof GitHubRepoName.Type;
-
-// npm package name: @scope/package or package
-export const NpmPackageName = Schema.String.check(
-  Schema.isPattern(/^(@[a-z0-9-~][a-z0-9-._~]*\/)?[a-z0-9-~][a-z0-9-._~]*$/),
-).pipe(Schema.brand("NpmPackageName"));
-export type NpmPackageName = typeof NpmPackageName.Type;
-
-// PyPI package name: letters, numbers, hyphens, underscores, dots
-export const PypiPackageName = Schema.String.check(
-  Schema.isPattern(/^[a-zA-Z0-9]([a-zA-Z0-9._-]*[a-zA-Z0-9])?$/),
-).pipe(Schema.brand("PypiPackageName"));
-export type PypiPackageName = typeof PypiPackageName.Type;
-
-// Crates.io crate name: letters, numbers, hyphens, underscores
-export const CratesPackageName = Schema.String.check(
-  Schema.isPattern(/^[a-zA-Z][a-zA-Z0-9_-]*$/),
-).pipe(Schema.brand("CratesPackageName"));
-export type CratesPackageName = typeof CratesPackageName.Type;
-
-// Union of all valid package names (for loose validation)
-export const PackageName = Schema.Union([
-  GitHubRepoName,
-  NpmPackageName,
-  PypiPackageName,
-  CratesPackageName,
-]);
-export type PackageName = typeof PackageName.Type;
-
-// ─── Package Spec ─────────────────────────────────────────────────────────────
-
 // Package spec - identifies a package/repo across registries
-// Uses plain string for name to allow parsing to handle validation
 export const PackageSpec = Schema.Struct({
   registry: Schema.Literals(["github", "npm", "pypi", "crates"]),
   name: Schema.String,
@@ -90,30 +52,6 @@ export class GitError extends Schema.TaggedErrorClass<GitError>()("@cvr/repo/typ
   cause: Schema.Unknown,
 }) {}
 
-export class CacheError extends Schema.TaggedErrorClass<CacheError>()(
-  "@cvr/repo/types/CacheError",
-  {
-    operation: Schema.String,
-    path: Schema.String,
-    cause: Schema.Unknown,
-  },
-) {}
-
-export class MetadataError extends Schema.TaggedErrorClass<MetadataError>()(
-  "@cvr/repo/types/MetadataError",
-  {
-    operation: Schema.String,
-    cause: Schema.Unknown,
-  },
-) {}
-
-export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()(
-  "@cvr/repo/types/NotFoundError",
-  {
-    spec: PackageSpec,
-  },
-) {}
-
 export class NetworkError extends Schema.TaggedErrorClass<NetworkError>()(
   "@cvr/repo/types/NetworkError",
   {
@@ -121,11 +59,6 @@ export class NetworkError extends Schema.TaggedErrorClass<NetworkError>()(
     cause: Schema.Unknown,
   },
 ) {}
-
-export class OpenError extends Schema.TaggedErrorClass<OpenError>()("@cvr/repo/types/OpenError", {
-  command: Schema.String,
-  cause: Schema.Unknown,
-}) {}
 
 // Utility to format bytes
 export const formatBytes = (bytes: number): string => {
@@ -157,4 +90,15 @@ export const specToString = (spec: PackageSpec): string => {
     onSome: (v) => `@${v}`,
   });
   return `${prefix}${spec.name}${version}`;
+};
+
+// Shared spec matching logic — case-insensitive for GitHub
+export const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
+  if (a.registry !== b.registry) return false;
+  const aName = a.registry === "github" ? a.name.toLowerCase() : a.name;
+  const bName = b.registry === "github" ? b.name.toLowerCase() : b.name;
+  if (aName !== bName) return false;
+  const aVersion = Option.getOrElse(a.version, () => "");
+  const bVersion = Option.getOrElse(b.version, () => "");
+  return aVersion === bVersion;
 };

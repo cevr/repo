@@ -1,9 +1,8 @@
 import { Effect, Layer, Option, Ref } from "effect";
 import { MetadataService } from "../../services/metadata.js";
-import type { MetadataIndex, PackageSpec } from "../../types.js";
+import type { MetadataIndex } from "../../types.js";
+import { specMatches } from "../../types.js";
 import { recordCall, type SequenceRef } from "../sequence.js";
-
-// ─── Mock State ───────────────────────────────────────────────────────────────
 
 export interface MockMetadataState {
   index: MetadataIndex;
@@ -12,8 +11,6 @@ export interface MockMetadataState {
 export const defaultMockMetadataState: MockMetadataState = {
   index: { version: 1, repos: [] },
 };
-
-// ─── Mock Implementation ──────────────────────────────────────────────────────
 
 export interface CreateMockMetadataServiceOptions {
   initialState?: Partial<MockMetadataState>;
@@ -43,13 +40,6 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
       ? recordCall(sequenceRef, { service: "metadata", method, args, result })
       : Effect.void;
 
-  const specMatches = (a: PackageSpec, b: PackageSpec): boolean => {
-    if (a.registry !== b.registry || a.name !== b.name) return false;
-    const aVersion = Option.getOrElse(a.version, () => "");
-    const bVersion = Option.getOrElse(b.version, () => "");
-    return aVersion === bVersion;
-  };
-
   const layer = Layer.succeed(MetadataService, {
     load: () =>
       Effect.gen(function* () {
@@ -76,19 +66,6 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
         });
       }),
 
-    addMany: (metadataList) =>
-      Effect.gen(function* () {
-        yield* record("addMany", { metadataList });
-        yield* Ref.update(stateRef, (s) => {
-          let repos = [...s.index.repos];
-          for (const metadata of metadataList) {
-            repos = repos.filter((r) => !specMatches(r.spec, metadata.spec));
-            repos.push(metadata);
-          }
-          return { ...s, index: { ...s.index, repos } };
-        });
-      }),
-
     remove: (spec) =>
       Effect.gen(function* () {
         const s = yield* Ref.get(stateRef);
@@ -103,26 +80,10 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
         return result;
       }),
 
-    removeMany: (specs) =>
-      Effect.gen(function* () {
-        const s = yield* Ref.get(stateRef);
-        const originalLength = s.index.repos.length;
-        const filtered = s.index.repos.filter(
-          (r) => !specs.some((spec) => specMatches(r.spec, spec)),
-        );
-        const removedCount = originalLength - filtered.length;
-        yield* record("removeMany", { specs }, removedCount);
-        yield* Ref.set(stateRef, {
-          ...s,
-          index: { ...s.index, repos: filtered },
-        });
-        return removedCount;
-      }),
-
     find: (spec) =>
       Effect.gen(function* () {
         const s = yield* Ref.get(stateRef);
-        const result = s.index.repos.find((r) => specMatches(r.spec, spec)) ?? null;
+        const result = Option.fromNullishOr(s.index.repos.find((r) => specMatches(r.spec, spec)));
         yield* record("find", { spec }, result);
         return result;
       }),
@@ -144,31 +105,12 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
         }));
       }),
 
-    findOlderThan: (days) =>
-      Effect.gen(function* () {
-        const s = yield* Ref.get(stateRef);
-        const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
-        const result = s.index.repos.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
-        yield* record("findOlderThan", { days }, result);
-        return result;
-      }),
-
-    findLargerThan: (bytes) =>
-      Effect.gen(function* () {
-        const s = yield* Ref.get(stateRef);
-        const result = s.index.repos.filter((r) => r.sizeBytes > bytes);
-        yield* record("findLargerThan", { bytes }, result);
-        return result;
-      }),
-
     all: () =>
       Effect.gen(function* () {
         const s = yield* Ref.get(stateRef);
         yield* record("all", {}, s.index.repos);
         return s.index.repos;
       }),
-
-    flush: () => record("flush", {}),
   });
 
   return {
@@ -177,7 +119,5 @@ export function createMockMetadataService(options: CreateMockMetadataServiceOpti
     getState: () => Ref.get(stateRef),
   };
 }
-
-// ─── Preset Configurations ────────────────────────────────────────────────────
 
 export const MockMetadataServiceDefault = createMockMetadataService();

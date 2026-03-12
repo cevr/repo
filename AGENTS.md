@@ -39,7 +39,7 @@ Each service in `src/services/` has:
 - Live layer: real filesystem/network
 - Test layer in `src/test-utils/layers/`: in-memory mock
 
-Test layers share parsing logic with live (duplicated in registry.ts).
+Test layers share `specMatches` from `src/types.ts` (single source of truth for both live and mock).
 
 ### Non-null Assertions
 

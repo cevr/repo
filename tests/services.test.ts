@@ -18,19 +18,15 @@ describe("fetch flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // User runs: repo fetch vercel/next.js
         const spec = yield* registry.parseSpec("vercel/next.js");
         expect(spec.registry).toBe("github");
         expect(spec.name).toBe("vercel/next.js");
 
-        // Get the destination path
         const destPath = yield* cache.getPath(spec);
         expect(destPath).toContain("vercel/next.js");
 
-        // Fetch the repo
         yield* registry.fetch(spec, destPath);
 
-        // Add to metadata (simulating what fetch command does)
         const now = new Date().toISOString();
         yield* metadata.add({
           spec,
@@ -40,8 +36,7 @@ describe("fetch flow", () => {
           path: destPath,
         });
 
-        // Verify it's in metadata
-        const found = yield* metadata.find(spec);
+        const found = Option.getOrNull(yield* metadata.find(spec));
         expect(found).not.toBeNull();
         expect(found?.path).toBe(destPath);
       }).pipe(Effect.provide(layer));
@@ -57,18 +52,15 @@ describe("fetch flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // User runs: repo fetch npm:lodash@4.17.21
         const spec = yield* registry.parseSpec("npm:lodash@4.17.21");
         expect(spec.registry).toBe("npm");
         expect(spec.name).toBe("lodash");
         expect(Option.getOrNull(spec.version)).toBe("4.17.21");
 
-        // Get the destination path - should include version
         const destPath = yield* cache.getPath(spec);
         expect(destPath).toContain("lodash");
         expect(destPath).toContain("4.17.21");
 
-        // Fetch and add to metadata
         yield* registry.fetch(spec, destPath);
         yield* metadata.add({
           spec,
@@ -78,8 +70,7 @@ describe("fetch flow", () => {
           path: destPath,
         });
 
-        // Verify
-        const found = yield* metadata.find(spec);
+        const found = Option.getOrNull(yield* metadata.find(spec));
         expect(found?.spec.name).toBe("lodash");
       }).pipe(Effect.provide(layer));
     }),
@@ -93,7 +84,6 @@ describe("fetch flow", () => {
         const registry = yield* RegistryService;
         const cache = yield* CacheService;
 
-        // User runs: repo fetch npm:@effect/cli@0.73.0
         const spec = yield* registry.parseSpec("npm:@effect/cli@0.73.0");
         expect(spec.registry).toBe("npm");
         expect(spec.name).toBe("@effect/cli");
@@ -117,7 +107,6 @@ describe("list flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Fetch multiple repos
         const specs = [
           yield* registry.parseSpec("vercel/next.js"),
           yield* registry.parseSpec("npm:effect@3.0.0"),
@@ -136,11 +125,9 @@ describe("list flow", () => {
           });
         }
 
-        // User runs: repo list
         const all = yield* metadata.all();
         expect(all.length).toBe(3);
 
-        // Verify different registries are present
         const registries = all.map((r) => r.spec.registry);
         expect(registries).toContain("github");
         expect(registries).toContain("npm");
@@ -160,7 +147,6 @@ describe("remove flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Fetch a repo
         const spec = yield* registry.parseSpec("owner/repo");
         const destPath = yield* cache.getPath(spec);
         yield* registry.fetch(spec, destPath);
@@ -172,18 +158,15 @@ describe("remove flow", () => {
           path: destPath,
         });
 
-        // Verify it exists
         const before = yield* metadata.find(spec);
-        expect(before).not.toBeNull();
+        expect(Option.isSome(before)).toBe(true);
 
-        // User runs: repo remove owner/repo
         yield* cache.remove(destPath);
         const removed = yield* metadata.remove(spec);
         expect(removed).toBe(true);
 
-        // Verify it's gone
         const after = yield* metadata.find(spec);
-        expect(after).toBeNull();
+        expect(Option.isNone(after)).toBe(true);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -199,7 +182,6 @@ describe("clean flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Fetch multiple repos
         const specs = [
           yield* registry.parseSpec("a/b"),
           yield* registry.parseSpec("c/d"),
@@ -218,27 +200,21 @@ describe("clean flow", () => {
           });
         }
 
-        // Verify repos exist
         const before = yield* metadata.all();
         expect(before.length).toBe(3);
 
-        // User runs: repo clean
         yield* cache.removeAll();
-        // Clear metadata
         for (const spec of specs) {
           yield* metadata.remove(spec);
         }
 
-        // Verify all gone
         const after = yield* metadata.all();
         expect(after.length).toBe(0);
       }).pipe(Effect.provide(layer));
     }),
   );
-});
 
-describe("prune flow", () => {
-  it.effect("finds repos older than specified days", () =>
+  it.effect("filters repos by age for prune", () =>
     Effect.gen(function* () {
       const { layer } = createTestLayer();
 
@@ -247,7 +223,6 @@ describe("prune flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Add an old repo (31 days ago)
         const oldSpec = yield* registry.parseSpec("old/repo");
         const oldDate = new Date(Date.now() - 31 * 24 * 60 * 60 * 1000);
         yield* metadata.add({
@@ -258,7 +233,6 @@ describe("prune flow", () => {
           path: yield* cache.getPath(oldSpec),
         });
 
-        // Add a recent repo
         const newSpec = yield* registry.parseSpec("new/repo");
         yield* metadata.add({
           spec: newSpec,
@@ -268,18 +242,17 @@ describe("prune flow", () => {
           path: yield* cache.getPath(newSpec),
         });
 
-        // User runs: repo prune --days 30
-        const oldRepos = yield* metadata.findOlderThan(30);
+        const all = yield* metadata.all();
+        const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        const oldRepos = all.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
         expect(oldRepos.length).toBe(1);
         expect(oldRepos[0]?.spec.name).toBe("old/repo");
 
-        // Prune them
         for (const repo of oldRepos) {
           yield* cache.remove(repo.path);
           yield* metadata.remove(repo.spec);
         }
 
-        // Verify only new repo remains
         const remaining = yield* metadata.all();
         expect(remaining.length).toBe(1);
         expect(remaining[0]?.spec.name).toBe("new/repo");
@@ -287,7 +260,7 @@ describe("prune flow", () => {
     }),
   );
 
-  it.effect("finds repos larger than specified size", () =>
+  it.effect("filters repos by size for prune", () =>
     Effect.gen(function* () {
       const { layer } = createTestLayer();
 
@@ -296,28 +269,26 @@ describe("prune flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Add a large repo
         const largeSpec = yield* registry.parseSpec("large/repo");
         yield* metadata.add({
           spec: largeSpec,
           fetchedAt: new Date().toISOString(),
           lastAccessedAt: new Date().toISOString(),
-          sizeBytes: 100_000_000, // 100MB
+          sizeBytes: 100_000_000,
           path: yield* cache.getPath(largeSpec),
         });
 
-        // Add a small repo
         const smallSpec = yield* registry.parseSpec("small/repo");
         yield* metadata.add({
           spec: smallSpec,
           fetchedAt: new Date().toISOString(),
           lastAccessedAt: new Date().toISOString(),
-          sizeBytes: 1_000_000, // 1MB
+          sizeBytes: 1_000_000,
           path: yield* cache.getPath(smallSpec),
         });
 
-        // User runs: repo prune --max-size 50MB
-        const largeRepos = yield* metadata.findLargerThan(50_000_000);
+        const all = yield* metadata.all();
+        const largeRepos = all.filter((r) => r.sizeBytes > 50_000_000);
         expect(largeRepos.length).toBe(1);
         expect(largeRepos[0]?.spec.name).toBe("large/repo");
       }).pipe(Effect.provide(layer));
@@ -335,7 +306,6 @@ describe("update flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Initial fetch
         const spec = yield* registry.parseSpec("owner/repo");
         const destPath = yield* cache.getPath(spec);
         const initialTime = new Date(Date.now() - 1000).toISOString();
@@ -347,17 +317,15 @@ describe("update flow", () => {
           path: destPath,
         });
 
-        // User runs: repo fetch owner/repo (again)
-        // This should update access time
         yield* metadata.updateAccessTime(spec);
 
-        // Verify access time was updated
-        const found = yield* metadata.find(spec);
+        const found = Option.getOrNull(yield* metadata.find(spec));
         expect(found).not.toBeNull();
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         expect(new Date(found!.lastAccessedAt).getTime()).toBeGreaterThan(
           new Date(initialTime).getTime(),
         );
-        // But fetchedAt should remain the same
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         expect(found!.fetchedAt).toBe(initialTime);
       }).pipe(Effect.provide(layer));
     }),
@@ -372,14 +340,12 @@ describe("spec parsing", () => {
       yield* Effect.gen(function* () {
         const registry = yield* RegistryService;
 
-        // GitHub formats
         const github1 = yield* registry.parseSpec("vercel/next.js");
         expect(specToString(github1)).toBe("vercel/next.js");
 
         const github2 = yield* registry.parseSpec("vercel/next.js@v14.0.0");
         expect(specToString(github2)).toBe("vercel/next.js@v14.0.0");
 
-        // npm formats
         const npm1 = yield* registry.parseSpec("npm:lodash");
         expect(specToString(npm1)).toBe("npm:lodash");
 
@@ -389,15 +355,12 @@ describe("spec parsing", () => {
         const npm3 = yield* registry.parseSpec("npm:@effect/cli@0.73.0");
         expect(specToString(npm3)).toBe("npm:@effect/cli@0.73.0");
 
-        // PyPI format
         const pypi = yield* registry.parseSpec("pypi:requests@2.31.0");
         expect(specToString(pypi)).toBe("pypi:requests@2.31.0");
 
-        // Crates format
         const crates = yield* registry.parseSpec("crates:serde@1.0.0");
         expect(specToString(crates)).toBe("crates:serde@1.0.0");
 
-        // Bare package name defaults to npm
         const bare = yield* registry.parseSpec("lodash");
         expect(bare.registry).toBe("npm");
       }).pipe(Effect.provide(layer));
@@ -413,11 +376,9 @@ describe("spec parsing", () => {
         const metadata = yield* MetadataService;
         const cache = yield* CacheService;
 
-        // Fetch with mixed case
         const spec1 = yield* registry.parseSpec("Vercel/Next.js");
         expect(spec1.name).toBe("vercel/next.js");
 
-        // Add to metadata
         const destPath = yield* cache.getPath(spec1);
         yield* metadata.add({
           spec: spec1,
@@ -427,7 +388,6 @@ describe("spec parsing", () => {
           path: destPath,
         });
 
-        // Lookup with different case should find same repo
         const spec2 = yield* registry.parseSpec("vercel/next.js");
         const spec3 = yield* registry.parseSpec("VERCEL/NEXT.JS");
 
@@ -435,11 +395,14 @@ describe("spec parsing", () => {
         const found2 = yield* metadata.find(spec2);
         const found3 = yield* metadata.find(spec3);
 
-        expect(found1).not.toBeNull();
-        expect(found2).not.toBeNull();
-        expect(found3).not.toBeNull();
-        expect(found1?.path).toBe(found2?.path);
-        expect(found2?.path).toBe(found3?.path);
+        expect(Option.isSome(found1)).toBe(true);
+        expect(Option.isSome(found2)).toBe(true);
+        expect(Option.isSome(found3)).toBe(true);
+        const f1 = Option.getOrNull(found1);
+        const f2 = Option.getOrNull(found2);
+        const f3 = Option.getOrNull(found3);
+        expect(f1?.path).toBe(f2?.path);
+        expect(f2?.path).toBe(f3?.path);
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -453,16 +416,13 @@ describe("git operations", () => {
       yield* Effect.gen(function* () {
         const git = yield* GitService;
 
-        // Clone a repo
         yield* git.clone("https://github.com/owner/repo.git", "/tmp/repo", {
           depth: 100,
         });
 
-        // Check if it's a git repo
         const isGit = yield* git.isGitRepo("/tmp/repo");
         expect(isGit).toBe(true);
 
-        // Non-cloned path should not be a git repo
         const notGit = yield* git.isGitRepo("/tmp/other");
         expect(notGit).toBe(false);
       }).pipe(Effect.provide(layer));
@@ -478,7 +438,7 @@ describe("git operations", () => {
 
         yield* git.clone("https://github.com/owner/repo.git", "/tmp/repo");
         const ref = yield* git.getCurrentRef("/tmp/repo");
-        expect(ref).toBe("v1.0.0"); // Test layer returns this
+        expect(ref).toBe("v1.0.0");
       }).pipe(Effect.provide(layer));
     }),
   );
@@ -494,7 +454,6 @@ describe("path flow", () => {
         const cache = yield* CacheService;
         const metadata = yield* MetadataService;
 
-        // Fetch a repo first
         const spec = yield* registry.parseSpec("owner/repo");
         const destPath = yield* cache.getPath(spec);
         yield* registry.fetch(spec, destPath);
@@ -506,15 +465,14 @@ describe("path flow", () => {
           path: destPath,
         });
 
-        // Now path lookup should work
-        const found = yield* metadata.find(spec);
+        const found = Option.getOrNull(yield* metadata.find(spec));
         expect(found).not.toBeNull();
         expect(found?.path).toBe(destPath);
       }).pipe(Effect.provide(layer));
     }),
   );
 
-  it.effect("returns null for uncached repo", () =>
+  it.effect("returns none for uncached repo", () =>
     Effect.gen(function* () {
       const { layer } = createTestLayer();
 
@@ -522,76 +480,16 @@ describe("path flow", () => {
         const registry = yield* RegistryService;
         const metadata = yield* MetadataService;
 
-        // Don't fetch, just try to find
         const spec = yield* registry.parseSpec("nonexistent/repo");
         const found = yield* metadata.find(spec);
-        expect(found).toBeNull();
-      }).pipe(Effect.provide(layer));
-    }),
-  );
-});
-
-describe("info flow", () => {
-  it.effect("returns metadata for cached repo with git info", () =>
-    Effect.gen(function* () {
-      const { layer } = createTestLayer();
-
-      yield* Effect.gen(function* () {
-        const registry = yield* RegistryService;
-        const cache = yield* CacheService;
-        const metadata = yield* MetadataService;
-        const git = yield* GitService;
-
-        // Setup: fetch and add to metadata
-        const spec = yield* registry.parseSpec("owner/repo");
-        const destPath = yield* cache.getPath(spec);
-        yield* git.clone("https://github.com/owner/repo.git", destPath, {
-          depth: 100,
-        });
-
-        const now = new Date().toISOString();
-        yield* metadata.add({
-          spec,
-          fetchedAt: now,
-          lastAccessedAt: now,
-          sizeBytes: 5000,
-          path: destPath,
-        });
-
-        // Verify metadata exists
-        const found = yield* metadata.find(spec);
-        expect(found).not.toBeNull();
-        expect(found?.sizeBytes).toBe(5000);
-        expect(found?.path).toBe(destPath);
-
-        // Verify git info is available
-        const isGit = yield* git.isGitRepo(destPath);
-        expect(isGit).toBe(true);
-
-        const ref = yield* git.getCurrentRef(destPath);
-        expect(ref).toBe("v1.0.0"); // test layer returns this
-      }).pipe(Effect.provide(layer));
-    }),
-  );
-
-  it.effect("returns null for uncached repo", () =>
-    Effect.gen(function* () {
-      const { layer } = createTestLayer();
-
-      yield* Effect.gen(function* () {
-        const registry = yield* RegistryService;
-        const metadata = yield* MetadataService;
-
-        const spec = yield* registry.parseSpec("missing/repo");
-        const found = yield* metadata.find(spec);
-        expect(found).toBeNull();
+        expect(Option.isNone(found)).toBe(true);
       }).pipe(Effect.provide(layer));
     }),
   );
 });
 
 describe("integration flow", () => {
-  it.effect("complete workflow: fetch, path, info, explore", () =>
+  it.effect("complete workflow: fetch, path, explore", () =>
     Effect.gen(function* () {
       const { layer } = createTestLayer();
 
@@ -601,15 +499,12 @@ describe("integration flow", () => {
         const metadata = yield* MetadataService;
         const git = yield* GitService;
 
-        // Step 1: Parse spec (user input)
         const spec = yield* registry.parseSpec("vercel/next.js");
         expect(spec.registry).toBe("github");
 
-        // Step 2: Check if cached (repo path)
         const beforeFetch = yield* metadata.find(spec);
-        expect(beforeFetch).toBeNull(); // Not cached yet
+        expect(Option.isNone(beforeFetch)).toBe(true);
 
-        // Step 3: Fetch (repo fetch)
         const destPath = yield* cache.getPath(spec);
         yield* registry.fetch(spec, destPath);
         yield* git.clone("https://github.com/vercel/next.js.git", destPath, {
@@ -625,26 +520,24 @@ describe("integration flow", () => {
           path: destPath,
         });
 
-        // Step 4: Path lookup (repo path)
-        const afterFetch = yield* metadata.find(spec);
+        const afterFetch = Option.getOrNull(yield* metadata.find(spec));
         expect(afterFetch).not.toBeNull();
         expect(afterFetch?.path).toBe(destPath);
         expect(destPath).toContain("vercel/next.js");
 
-        // Step 5: Info lookup (repo info)
         expect(afterFetch?.sizeBytes).toBe(50000);
         const isGit = yield* git.isGitRepo(destPath);
         expect(isGit).toBe(true);
 
-        // Step 6: Update access time on re-access
         const beforeUpdate = afterFetch?.lastAccessedAt;
         yield* metadata.updateAccessTime(spec);
-        const updated = yield* metadata.find(spec);
+        const updated = Option.getOrNull(yield* metadata.find(spec));
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
         expect(new Date(updated!.lastAccessedAt).getTime()).toBeGreaterThanOrEqual(
+          // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
           new Date(beforeUpdate!).getTime(),
         );
 
-        // Step 7: List shows the repo
         const all = yield* metadata.all();
         expect(all.length).toBe(1);
         expect(all[0]?.spec.name).toBe("vercel/next.js");

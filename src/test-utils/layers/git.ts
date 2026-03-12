@@ -2,8 +2,6 @@ import { Effect, Layer, Ref } from "effect";
 import { GitService } from "../../services/git.js";
 import { recordCall, type SequenceRef } from "../sequence.js";
 
-// ─── Mock State ───────────────────────────────────────────────────────────────
-
 export interface MockGitState {
   clonedRepos: Map<string, { url: string; ref?: string; depth?: number }>;
   updatedPaths: string[];
@@ -17,8 +15,6 @@ export const defaultMockGitState: MockGitState = {
   defaultBranch: "main",
   currentRef: "v1.0.0",
 };
-
-// ─── Mock Implementation ──────────────────────────────────────────────────────
 
 export interface CreateMockGitServiceOptions {
   initialState?: Partial<MockGitState>;
@@ -99,7 +95,5 @@ export function createMockGitService(options: CreateMockGitServiceOptions = {}):
     getState: () => Ref.get(stateRef),
   };
 }
-
-// ─── Preset Configurations ────────────────────────────────────────────────────
 
 export const MockGitServiceDefault = createMockGitService();
