@@ -1,5 +1,31 @@
 # @cvr/repo
 
+## 1.3.0
+
+### Minor Changes
+
+- [`f546c53`](https://github.com/cevr/repo/commit/f546c53da79e7179ff913ba5ed4f59100b62c88a) Thanks [@cevr](https://github.com/cevr)! - Auto-prune stale repos on fetch. Every `repo fetch` now removes cached repos not accessed in 30+ days. Extracted `pruneByAge` as shared logic between `fetch` and `clean`.
+
+- [`86b39fc`](https://github.com/cevr/repo/commit/86b39fcb293f9fb0d20a8a250505eefffcac787b) Thanks [@cevr](https://github.com/cevr)! - Migrate from Effect v3 to v4 (effect-smol). Updates all services to ServiceMap.Service, errors to Schema.TaggedErrorClass, CLI to effect/unstable/cli, and test runner to effect-bun-test. Drops @effect/cli, @effect/platform, @effect/vitest, and vitest.
+
+- [`f1ff77e`](https://github.com/cevr/repo/commit/f1ff77e8296c099e94953439361a550c81bc8ab8) Thanks [@cevr](https://github.com/cevr)! - Simplify CLI surface and migrate to Effect platform services.
+
+  **Command surface reduction (10 → 5):** Remove `info`, `open`, `stats`, `search`, `prune`. Merge prune logic into `clean` with `--days`, `--max-size`, `--dry-run` flags. Add `--json` to `fetch`.
+
+  **Output discipline:** stdout = data only (paths, JSON), stderr = status/progress messages. Makes `cd $(repo fetch owner/repo)` work.
+
+  **Effect platform migration:**
+  - `Bun.spawn` → `ChildProcessSpawner` + `ChildProcess` from `effect/unstable/process`
+  - `fetch()` → `HttpClient` from `effect/unstable/http`
+  - `Bun.write` / `import("node:*")` → `FileSystem` from Effect
+  - `process.env.HOME` → `Config.string("HOME")`
+  - `Date.now()` / `new Date()` → `Clock.currentTimeMillis`
+  - `null` → `Option` for `metadata.find`, `CacheState.index`, `extractRepoInfo`
+
+  **Bug fixes:** git clone fallback cleanup, human-readable error messages, error swallowing fixes.
+
+  **Dead code cleanup:** Remove unused types, service methods, branded names, `parseSpecOrThrow`.
+
 ## 1.2.0
 
 ### Minor Changes
