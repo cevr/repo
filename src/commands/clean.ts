@@ -1,9 +1,33 @@
 import { Command, Flag } from "effect/unstable/cli";
 import { Clock, Console, Effect, Option } from "effect";
 import { formatBytes, specToString } from "../types.js";
+import type { PackageSpec } from "../types.js";
 import { CacheService } from "../services/cache.js";
 import { MetadataService } from "../services/metadata.js";
-import { handleCommandError } from "./shared.js";
+
+/**
+ * Prune repos not accessed in `days` days.
+ * Returns specs of removed repos (empty if nothing pruned).
+ * Shared by `clean --days` and `fetch` auto-prune.
+ */
+export const pruneByAge = Effect.fn("pruneByAge")(function* (days: number) {
+  const cache = yield* CacheService;
+  const metadata = yield* MetadataService;
+
+  const repos = yield* metadata.all();
+  if (repos.length === 0) return [] as readonly PackageSpec[];
+
+  const nowMs = yield* Clock.currentTimeMillis;
+  const cutoff = nowMs - days * 24 * 60 * 60 * 1000;
+  const stale = repos.filter((r) => new Date(r.lastAccessedAt).getTime() < cutoff);
+
+  for (const repo of stale) {
+    yield* cache.remove(repo.path);
+    yield* metadata.remove(repo.spec);
+  }
+
+  return stale.map((r) => r.spec);
+});
 
 const allFlag = Flag.boolean("all").pipe(
   Flag.withDefault(false),
@@ -144,5 +168,5 @@ export const clean = Command.make(
       yield* Console.error("");
       yield* Console.error(`Removed ${toRemove.length} repositories.`);
       yield* Console.log(`Freed: ${formatBytes(totalSize)}`);
-    }).pipe(Effect.catch(handleCommandError)),
+    }),
 );

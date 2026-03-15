@@ -6,6 +6,9 @@ import { MetadataService } from "../services/metadata.js";
 import { RegistryService } from "../services/registry.js";
 import { GitService } from "../services/git.js";
 import { handleCommandError } from "./shared.js";
+import { pruneByAge } from "./clean.js";
+
+const AUTO_PRUNE_DAYS = 30;
 
 const JsonUnknown = Schema.fromJsonString(Schema.Unknown);
 
@@ -150,5 +153,15 @@ export const fetch = Command.make(
       } else {
         yield* Console.log(destPath);
       }
-    }).pipe(Effect.catch(handleCommandError)),
+    }).pipe(Effect.andThen(autoPrune), Effect.catch(handleCommandError)),
+);
+
+const autoPrune = pruneByAge(AUTO_PRUNE_DAYS).pipe(
+  Effect.andThen((pruned) =>
+    pruned.length > 0
+      ? Console.error(
+          `Pruned ${pruned.length} stale repo${pruned.length === 1 ? "" : "s"} (>${AUTO_PRUNE_DAYS}d)`,
+        )
+      : Effect.void,
+  ),
 );
